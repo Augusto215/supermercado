@@ -1,0 +1,8 @@
+.git
+.gitignore
+.next
+node_modules
+npm-debug.log*
+next.log
+trace-exit.cjs
+tsconfig.tsbuildinfo
