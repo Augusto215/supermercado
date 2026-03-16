@@ -1,15 +1,32 @@
 import path from "node:path";
-import { access, readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 
 import { FIELD_ORDER } from "@/lib/fields";
 import { type PayrollRow } from "@/lib/types";
 
 const RHID_DAYS_DEFAULT = 26;
-const RHID_CANDIDATES: string[] = [
-  process.env.RHID_CSV_PATH ?? "",
-  path.join(process.cwd(), "relatorio_2026311_1914.CSV"),
-  "/home/augusto/Downloads/relatorio_2026311_1914.CSV"
-].filter((candidate) => candidate.trim().length > 0);
+function buildRhidCandidates(): string[] {
+  const csvName = "relatorio_2026311_1914.CSV";
+  const configuredPath = (process.env.RHID_CSV_PATH ?? "").trim();
+  const candidates = new Set<string>();
+
+  if (configuredPath) {
+    candidates.add(configuredPath);
+
+    if (!path.isAbsolute(configuredPath)) {
+      candidates.add(path.join(process.cwd(), configuredPath));
+      candidates.add(path.join("/app", configuredPath));
+    }
+  }
+
+  candidates.add(path.join(process.cwd(), csvName));
+  candidates.add(path.join("/app", csvName));
+  candidates.add("/home/augusto/Downloads/relatorio_2026311_1914.CSV");
+
+  return Array.from(candidates);
+}
+
+const RHID_CANDIDATES = buildRhidCandidates();
 
 const LEGACY_FILE = "VARIAVEIS DA FOLHA - FILIAL 01 - Copia.csv.xls";
 
@@ -130,8 +147,11 @@ function indexFromAliases(headers: string[], aliases: string[]): number {
 async function resolveRhidFilePath(): Promise<string | null> {
   for (const filePath of RHID_CANDIDATES) {
     try {
-      await access(filePath);
-      return filePath;
+      const fileStats = await stat(filePath);
+
+      if (fileStats.isFile()) {
+        return filePath;
+      }
     } catch {
       continue;
     }

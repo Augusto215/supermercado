@@ -12,6 +12,4 @@ services:
     environment:
       NODE_ENV: production
       TZ: America/Sao_Paulo
-      RHID_CSV_PATH: relatorio_2026311_1914.CSV
-    volumes:
-      - ./relatorio_2026311_1914.CSV:/app/relatorio_2026311_1914.CSV:ro
+      RHID_CSV_PATH: /app/relatorio_2026311_1914.CSV

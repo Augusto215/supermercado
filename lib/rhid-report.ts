@@ -1,5 +1,5 @@
 import path from "node:path";
-import { access, readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 
 import {
   type RhidAnalyticalSummary,
@@ -13,11 +13,28 @@ const DEFAULT_WORK_DAYS = 26;
 const VALE_REFEICAO_BASE = 15.82;
 const VALE_REFEICAO_PERCENT = 0.2;
 
-const RHID_CSV_CANDIDATES: string[] = [
-  process.env.RHID_CSV_PATH ?? "",
-  path.join(process.cwd(), "relatorio_2026311_1914.CSV"),
-  "/home/augusto/Downloads/relatorio_2026311_1914.CSV"
-].filter((candidate) => candidate.trim().length > 0);
+function buildCsvCandidates(): string[] {
+  const csvName = "relatorio_2026311_1914.CSV";
+  const configuredPath = (process.env.RHID_CSV_PATH ?? "").trim();
+  const candidates = new Set<string>();
+
+  if (configuredPath) {
+    candidates.add(configuredPath);
+
+    if (!path.isAbsolute(configuredPath)) {
+      candidates.add(path.join(process.cwd(), configuredPath));
+      candidates.add(path.join("/app", configuredPath));
+    }
+  }
+
+  candidates.add(path.join(process.cwd(), csvName));
+  candidates.add(path.join("/app", csvName));
+  candidates.add("/home/augusto/Downloads/relatorio_2026311_1914.CSV");
+
+  return Array.from(candidates);
+}
+
+const RHID_CSV_CANDIDATES = buildCsvCandidates();
 
 interface HeaderIndexes {
   nome: number;
@@ -38,7 +55,7 @@ function roundTwo(value: number): number {
   return Number(value.toFixed(2));
 }
 
-function decodeCsv(buffer: Buffer): string {
+export function decodeCsv(buffer: Buffer): string {
   const utf8Text = buffer.toString("utf8");
 
   if (utf8Text.includes("\uFFFD")) {
@@ -175,7 +192,7 @@ function sortByMetric(rows: RhidProcessedRow[], getter: (row: RhidProcessedRow) 
   });
 }
 
-function buildLists(rows: RhidProcessedRow[]): RhidLists {
+export function buildLists(rows: RhidProcessedRow[]): RhidLists {
   return {
     maisAtrasos: sortByMetric(
       rows.filter((row) => row.atrasoTotalMin > 0),
@@ -196,7 +213,7 @@ function pickTop(rows: RhidProcessedRow[]): RhidProcessedRow | null {
   return rows[0] ?? null;
 }
 
-function buildSummary(rows: RhidProcessedRow[], lists: RhidLists, diasUteis: number): RhidAnalyticalSummary {
+export function buildSummary(rows: RhidProcessedRow[], lists: RhidLists, diasUteis: number): RhidAnalyticalSummary {
   const totalColaboradores = rows.length;
   const totalFaltas = rows.reduce((sum, row) => sum + row.faltas, 0);
   const totalAtrasoMin = rows.reduce((sum, row) => sum + row.atrasoTotalMin, 0);
@@ -225,7 +242,7 @@ function buildSummary(rows: RhidProcessedRow[], lists: RhidLists, diasUteis: num
   };
 }
 
-function processRows(rawRows: RhidRawRow[], diasUteis: number): RhidProcessedRow[] {
+export function processRows(rawRows: RhidRawRow[], diasUteis: number): RhidProcessedRow[] {
   return rawRows.map((row) => {
     const faltas = Math.max(0, row.diaFalta);
     const atrasoTotalMin = Math.max(0, row.faltaEAtrasoMin);
@@ -256,8 +273,11 @@ function processRows(rawRows: RhidRawRow[], diasUteis: number): RhidProcessedRow
 async function resolveCsvPath(): Promise<string | null> {
   for (const candidate of RHID_CSV_CANDIDATES) {
     try {
-      await access(candidate);
-      return candidate;
+      const fileStats = await stat(candidate);
+
+      if (fileStats.isFile()) {
+        return candidate;
+      }
     } catch {
       continue;
     }
@@ -266,7 +286,7 @@ async function resolveCsvPath(): Promise<string | null> {
   return null;
 }
 
-function parseRawRows(content: string, warnings: string[]): { rawRows: RhidRawRow[]; diasUteis: number } {
+export function parseRawRows(content: string, warnings: string[]): { rawRows: RhidRawRow[]; diasUteis: number } {
   const lines = content
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -330,7 +350,7 @@ function parseRawRows(content: string, warnings: string[]): { rawRows: RhidRawRo
   return { rawRows, diasUteis };
 }
 
-function emptyReport(warnings: string[], sourceFile: string | null): RhidReportData {
+export function emptyReport(warnings: string[], sourceFile: string | null): RhidReportData {
   const emptyLists: RhidLists = {
     maisAtrasos: [],
     comFaltas: [],
@@ -351,9 +371,7 @@ export async function loadRhidReportData(): Promise<RhidReportData> {
   const sourceFile = await resolveCsvPath();
 
   if (!sourceFile) {
-    warnings.push(
-      "Arquivo RHiD nao encontrado. Defina RHID_CSV_PATH ou use /home/augusto/Downloads/relatorio_2026311_1914.CSV."
-    );
+    warnings.push("Arquivo RHiD nao encontrado. Defina RHID_CSV_PATH para um CSV valido.");
     return emptyReport(warnings, null);
   }
 
@@ -373,7 +391,8 @@ export async function loadRhidReportData(): Promise<RhidReportData> {
     };
   } catch (error) {
     console.error("Falha ao carregar CSV RHiD:", error);
-    warnings.push("Falha de leitura do CSV RHiD.");
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    warnings.push(`Falha de leitura do CSV RHiD: ${errorMessage}`);
     return emptyReport(warnings, sourceFile);
   }
 }

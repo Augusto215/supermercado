@@ -1,14 +1,25 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { RhidAnalysisPanel } from "@/components/rhid-analysis-panel";
-import { loadRhidReportData } from "@/lib/rhid-report";
+import { type RhidReportData } from "@/lib/types";
 
-export const dynamic = "force-dynamic";
+export default function HomePage(): JSX.Element {
+  const [report, setReport] = useState<RhidReportData | null>(null);
 
-export default async function HomePage(): Promise<JSX.Element> {
-  const report = await loadRhidReportData();
+  useEffect(() => {
+    fetch("/api/data")
+      .then((res) => res.json())
+      .then(setReport);
+  }, []);
+
+  if (!report) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <div className="page-stack">
-      <RhidAnalysisPanel report={report} />
+      <RhidAnalysisPanel report={report} onReportUpdate={setReport} />
     </div>
   );
 }

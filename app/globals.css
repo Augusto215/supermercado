@@ -20,6 +20,9 @@
   --brand-dark: #ff8c33;
   --brand-soft: rgba(255, 106, 0, 0.14);
 
+  --primary: var(--brand);
+  --primary-hover: var(--brand-dark);
+
   --ok: #31ffbc;
   --danger: #ff6b8a;
 
@@ -287,6 +290,31 @@ strong {
   margin: 7px 0 0;
   color: var(--text-soft);
   line-height: 1.45;
+}
+
+.upload-section {
+  display: flex;
+  align-items: center;
+}
+
+.upload-button {
+  display: inline-block;
+  padding: 8px 16px;
+  background-color: var(--primary);
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s;
+}
+
+.upload-button:hover {
+  background-color: var(--primary-hover);
+}
+
+.upload-button:disabled {
+  background-color: var(--text-soft);
+  cursor: not-allowed;
 }
 
 .section-kicker {

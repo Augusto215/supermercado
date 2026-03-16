@@ -82,6 +82,7 @@ function RankingList({ title, rows, metric, emptyLabel }: RankingListProps): JSX
 
 interface RhidAnalysisPanelProps {
   report: RhidReportData;
+  onReportUpdate: (report: RhidReportData) => void;
 }
 
 function fileNameFromPath(filePath: string | null): string {
@@ -93,9 +94,38 @@ function fileNameFromPath(filePath: string | null): string {
   return normalized.split("/").pop() ?? filePath;
 }
 
-export function RhidAnalysisPanel({ report }: RhidAnalysisPanelProps): JSX.Element {
+export function RhidAnalysisPanel({ report, onReportUpdate }: RhidAnalysisPanelProps): JSX.Element {
   const [statusFilter, setStatusFilter] = useState<"TODOS" | "DESCONTAR">("TODOS");
+  const [uploading, setUploading] = useState(false);
   const { processedRows, lists, summary, sourceFile, warnings } = report;
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Upload failed");
+      }
+
+      const newReport = await response.json();
+      onReportUpdate(newReport);
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      alert("Erro ao fazer upload do arquivo.");
+    } finally {
+      setUploading(false);
+    }
+  };
   const filteredRows = useMemo(() => {
     if (statusFilter === "DESCONTAR") {
       return processedRows.filter((row) => row.statusFaltas === "DESCONTAR");
@@ -106,12 +136,27 @@ export function RhidAnalysisPanel({ report }: RhidAnalysisPanelProps): JSX.Eleme
 
   return (
     <section className="panel">
-      <div className="panel-head">
-        <h3>Analise de Ponto RHiD</h3>
-        <p>
-          Tabela consolidada por colaborador com regras de faltas, atrasos, horas extras, banco de horas
-          e estimativa de vale refeicao.
-        </p>
+      <div className="panel-head split">
+        <div>
+          <h3>Analise de Ponto RHiD</h3>
+          <p>
+            Tabela consolidada por colaborador com regras de faltas, atrasos, horas extras, banco de horas
+            e estimativa de vale refeicao.
+          </p>
+        </div>
+        <div className="upload-section">
+          <label htmlFor="file-upload" className="upload-button">
+            {uploading ? "Enviando..." : "Subir Planilha"}
+          </label>
+          <input
+            id="file-upload"
+            type="file"
+            accept=".csv"
+            onChange={handleFileUpload}
+            disabled={uploading}
+            style={{ display: "none" }}
+          />
+        </div>
       </div>
 
       <div className="source-info">
