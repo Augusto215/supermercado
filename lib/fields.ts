@@ -106,8 +106,8 @@ export const DEFAULT_AUTOMATION_RULES: AutomationRuleConfig[] = [
   },
   {
     id: "caixa-dsr",
-    nome: "Diferenca de caixa no DSR",
-    descricao: "Diferenca de caixa positiva gera 10% de desconto em DSR.",
+    nome: "Desconto por diferenca de caixa",
+    descricao: "Quando Diferenca de Caixa (226) passa de R$ 1,05, desconta o valor no campo DSR (44).",
     campoImpacto: ["226", "44"],
     ativo: true
   },

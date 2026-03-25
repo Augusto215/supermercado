@@ -12,6 +12,8 @@ export const metadata: Metadata = {
   description: "Painel moderno de folha com edicao manual por campo e automacoes operacionais."
 };
 
+export const dynamic = "force-dynamic";
+
 interface RootLayoutProps {
   children: ReactNode;
 }

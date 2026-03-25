@@ -12,4 +12,6 @@ services:
     environment:
       NODE_ENV: production
       TZ: America/Sao_Paulo
-      RHID_CSV_PATH: /app/relatorio_2026311_1914.CSV
+      RHID_API_BASE_URL: https://www.rhid.com.br/v2/api.svc
+      RHID_API_TOKEN: ${RHID_API_TOKEN}
+      RHID_FETCH_APURACAO: "false"

@@ -85,47 +85,32 @@ interface RhidAnalysisPanelProps {
   onReportUpdate: (report: RhidReportData) => void;
 }
 
-function fileNameFromPath(filePath: string | null): string {
-  if (!filePath) {
-    return "Nao encontrado";
-  }
-
-  const normalized = filePath.replace(/\\/g, "/");
-  return normalized.split("/").pop() ?? filePath;
-}
-
 export function RhidAnalysisPanel({ report, onReportUpdate }: RhidAnalysisPanelProps): JSX.Element {
   const [statusFilter, setStatusFilter] = useState<"TODOS" | "DESCONTAR">("TODOS");
-  const [uploading, setUploading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const { processedRows, lists, summary, sourceFile, warnings } = report;
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setUploading(true);
+  const handleRefresh = async () => {
+    setRefreshing(true);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const response = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
+      const response = await fetch("/api/data", {
+        cache: "no-store"
       });
 
       if (!response.ok) {
-        throw new Error("Upload failed");
+        throw new Error("Falha ao atualizar dados");
       }
 
       const newReport = await response.json();
       onReportUpdate(newReport);
     } catch (error) {
-      console.error("Error uploading file:", error);
-      alert("Erro ao fazer upload do arquivo.");
+      console.error("Erro ao atualizar dados RHiD:", error);
+      alert("Erro ao atualizar dados da API RHiD.");
     } finally {
-      setUploading(false);
+      setRefreshing(false);
     }
   };
+
   const filteredRows = useMemo(() => {
     if (statusFilter === "DESCONTAR") {
       return processedRows.filter((row) => row.statusFaltas === "DESCONTAR");
@@ -144,23 +129,15 @@ export function RhidAnalysisPanel({ report, onReportUpdate }: RhidAnalysisPanelP
             e estimativa de vale refeicao.
           </p>
         </div>
-        <div className="upload-section">
-          <label htmlFor="file-upload" className="upload-button">
-            {uploading ? "Enviando..." : "Subir Planilha"}
-          </label>
-          <input
-            id="file-upload"
-            type="file"
-            accept=".csv"
-            onChange={handleFileUpload}
-            disabled={uploading}
-            style={{ display: "none" }}
-          />
+        <div className="topbar-actions">
+          <button className="primary-btn" onClick={handleRefresh} disabled={refreshing}>
+            {refreshing ? "Atualizando..." : "Atualizar da API"}
+          </button>
         </div>
       </div>
 
       <div className="source-info">
-        <strong>Arquivo:</strong> {fileNameFromPath(sourceFile)}
+        <strong>Origem:</strong> {sourceFile ?? "RHiD API"}
       </div>
 
       {warnings.length > 0 && (
@@ -270,21 +247,21 @@ export function RhidAnalysisPanel({ report, onReportUpdate }: RhidAnalysisPanelP
           title="Colaboradores com mais atrasos"
           rows={lists.maisAtrasos}
           metric="atraso"
-          emptyLabel="Nenhum atraso registrado no arquivo."
+          emptyLabel="Nenhum atraso registrado no periodo."
         />
 
         <RankingList
           title="Colaboradores com faltas"
           rows={lists.comFaltas}
           metric="faltas"
-          emptyLabel="Nenhuma falta registrada no arquivo."
+          emptyLabel="Nenhuma falta registrada no periodo."
         />
 
         <RankingList
           title="Colaboradores com mais horas extras"
           rows={lists.maisHorasExtras}
           metric="extras"
-          emptyLabel="Nenhuma hora extra registrada no arquivo."
+          emptyLabel="Nenhuma hora extra registrada no periodo."
         />
       </div>
 

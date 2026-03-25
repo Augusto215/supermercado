@@ -7,9 +7,9 @@ import { type ReactNode } from "react";
 import { usePayroll } from "@/components/payroll-provider";
 
 const NAV_ITEMS = [
-  { href: "/", label: "Painel" },
-  { href: "/colaboradores", label: "Colaboradores" },
   { href: "/campos", label: "Campos" },
+  { href: "/painel", label: "Painel" },
+  { href: "/colaboradores", label: "Colaboradores" },
   { href: "/automacoes", label: "Automacoes" }
 ];
 

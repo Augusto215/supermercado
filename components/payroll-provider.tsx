@@ -49,12 +49,22 @@ function roundTwo(value: number): number {
   return Number(value.toFixed(2));
 }
 
+const CAIXA_DESCONTO_LIMITE = 1.05;
+
 function sanitizeNumber(value: number): number {
   if (!Number.isFinite(value)) {
     return 0;
   }
 
   return value;
+}
+
+function calcularDescontoDiferencaCaixa(diferencaCaixa: number): number {
+  if (!Number.isFinite(diferencaCaixa) || diferencaCaixa <= CAIXA_DESCONTO_LIMITE) {
+    return 0;
+  }
+
+  return roundTwo(diferencaCaixa);
 }
 
 export function PayrollProvider({ children, initialRows }: PayrollProviderProps): JSX.Element {
@@ -139,10 +149,7 @@ export function PayrollProvider({ children, initialRows }: PayrollProviderProps)
 
           if (rule.id === "caixa-dsr") {
             const diferencaCaixa = nextValues["226"] ?? 0;
-
-            if (diferencaCaixa > 0) {
-              nextValues["44"] = roundTwo(diferencaCaixa * 0.1);
-            }
+            nextValues["44"] = calcularDescontoDiferencaCaixa(diferencaCaixa);
           }
 
           if (rule.id === "meta-extra") {

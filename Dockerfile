@@ -26,8 +26,6 @@ COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/next.config.mjs ./next.config.mjs
 COPY --from=builder /app/.next ./.next
-COPY --from=builder ["/app/relatorio_2026311_1914.CSV", "./relatorio_2026311_1914.CSV"]
-COPY --from=builder ["/app/VARIAVEIS DA FOLHA - FILIAL 01 - Copia.csv.xls", "./VARIAVEIS DA FOLHA - FILIAL 01 - Copia.csv.xls"]
 
 USER nextjs
 EXPOSE 3000
