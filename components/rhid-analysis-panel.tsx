@@ -35,6 +35,8 @@ function formatCurrency(value: number): string {
 }
 
 function metricValue(row: RhidProcessedRow, key: "atraso" | "faltas" | "extras"): string {
+  if (row.semEscala) return "--";
+
   if (key === "faltas") {
     return formatFaltas(row.faltas);
   }
@@ -196,8 +198,11 @@ export function RhidAnalysisPanel({ report, onReportUpdate }: RhidAnalysisPanelP
             <tr>
               <th>Nome</th>
               <th>Faltas</th>
+              <th>Qtd atrasos</th>
               <th>Atraso total</th>
-              <th>Horas extras totais</th>
+              <th>Extras totais</th>
+              <th>Extras a pagar</th>
+              <th>Extras p/ banco</th>
               <th>Banco de horas</th>
               <th>Status faltas</th>
               <th>Alerta atraso</th>
@@ -212,10 +217,13 @@ export function RhidAnalysisPanel({ report, onReportUpdate }: RhidAnalysisPanelP
                 <td className="sticky-cell employee-cell">
                   <strong>{row.nome}</strong>
                 </td>
-                <td>{formatFaltas(row.faltas)}</td>
-                <td>{formatMinutes(row.atrasoTotalMin)}</td>
-                <td>{formatMinutes(row.horasExtrasTotaisMin)}</td>
-                <td>{formatMinutes(row.bancoHorasMin)}</td>
+                <td>{row.semEscala ? "--" : formatFaltas(row.faltas)}</td>
+                <td>{row.semEscala ? "--" : String(row.quantidadeAtrasos)}</td>
+                <td>{row.semEscala ? "--" : formatMinutes(row.atrasoTotalMin)}</td>
+                <td>{row.semEscala ? "--" : formatMinutes(row.horasExtrasTotaisMin)}</td>
+                <td>{row.semEscala ? "--" : formatMinutes(row.horasExtrasPagarMin)}</td>
+                <td>{row.semEscala ? "--" : formatMinutes(row.horasExtrasBancoMin)}</td>
+                <td>{row.semEscala ? "--" : formatMinutes(row.bancoHorasMin)}</td>
                 <td>
                   <span className={`status-pill ${row.statusFaltas === "DESCONTAR" ? "danger" : "ok"}`}>
                     {row.statusFaltas}
@@ -233,7 +241,7 @@ export function RhidAnalysisPanel({ report, onReportUpdate }: RhidAnalysisPanelP
             ))}
             {filteredRows.length === 0 && (
               <tr>
-                <td colSpan={10} className="empty-row">
+                <td colSpan={13} className="empty-row">
                   Nenhum colaborador encontrado para esse filtro.
                 </td>
               </tr>

@@ -1,33 +1,30 @@
 import type { Metadata } from "next";
+import { Montserrat } from "next/font/google";
 import { type ReactNode } from "react";
-
-import { AppShell } from "@/components/app-shell";
-import { PayrollProvider } from "@/components/payroll-provider";
-import { loadPayrollRows } from "@/lib/parse-sheet";
 
 import "./globals.css";
 
-export const metadata: Metadata = {
-  title: "R Cruz Supermercado | Painel de Automacoes",
-  description: "Painel moderno de folha com edicao manual por campo e automacoes operacionais."
-};
+const montserrat = Montserrat({
+  subsets: ["latin"],
+  variable: "--font-montserrat",
+  display: "swap",
+  weight: ["400", "500", "600", "700", "800"]
+});
 
-export const dynamic = "force-dynamic";
+export const metadata: Metadata = {
+  title: "R Cruz Supermercado | Painel de Automações",
+  description: "Painel de folha, ponto RHiD e automações operacionais.",
+  icons: { icon: "/logo.png", apple: "/logo.png" }
+};
 
 interface RootLayoutProps {
   children: ReactNode;
 }
 
-export default async function RootLayout({ children }: RootLayoutProps): Promise<JSX.Element> {
-  const initialRows = await loadPayrollRows();
-
+export default function RootLayout({ children }: RootLayoutProps): JSX.Element {
   return (
-    <html lang="pt-BR">
-      <body>
-        <PayrollProvider initialRows={initialRows}>
-          <AppShell>{children}</AppShell>
-        </PayrollProvider>
-      </body>
+    <html lang="pt-BR" className={montserrat.variable}>
+      <body>{children}</body>
     </html>
   );
 }

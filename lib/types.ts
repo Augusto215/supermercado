@@ -46,6 +46,8 @@ export interface RhidRawRow {
   extraNoturnaMin: number;
   bancoTotalMin: number;
   bancoSaldoMin: number;
+  semEscala: boolean;
+  quantidadeAtrasos: number;
 }
 
 export interface RhidProcessedRow {
@@ -53,13 +55,17 @@ export interface RhidProcessedRow {
   nome: string;
   faltas: number;
   atrasoTotalMin: number;
+  quantidadeAtrasos: number;
   horasExtrasTotaisMin: number;
+  horasExtrasPagarMin: number;
+  horasExtrasBancoMin: number;
   bancoHorasMin: number;
   statusFaltas: "DESCONTAR" | "OK";
   alertaAtraso: "ALERTA" | "OK";
   motivoDesconto: string;
   valorDesconto: number;
   valorValeRefeicao: number;
+  semEscala: boolean;
 }
 
 export interface RhidLists {

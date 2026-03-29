@@ -4,6 +4,7 @@ import { useMemo } from "react";
 
 import { usePayroll } from "@/components/payroll-provider";
 import { FIELD_DEFINITIONS } from "@/lib/fields";
+import { exportPayrollReport } from "@/lib/export-csv";
 
 const gainCodes = FIELD_DEFINITIONS.filter((field) => field.category === "Ganhos").map((field) => field.key);
 const discountCodes = FIELD_DEFINITIONS.filter((field) => field.category === "Descontos").map((field) => field.key);
@@ -42,11 +43,24 @@ export function DashboardOverview(): JSX.Element {
       .slice(0, 5);
   }, [rows]);
 
+  const handleExportReport = () => {
+    exportPayrollReport(rows);
+  };
+
   return (
     <section className="panel">
-      <div className="panel-head">
-        <h3>Visao Geral da Operacao</h3>
-        <p>Painel em tempo real com totais de folha, alertas e automacoes.</p>
+      <div className="panel-head split">
+        <div>
+          <h3>Visao Geral da Operacao</h3>
+          <p>Painel em tempo real com totais de folha, alertas e automacoes.</p>
+        </div>
+        <button 
+          className="btn btn-primary"
+          onClick={handleExportReport}
+          title="Exporta relatorio completo em CSV para enviar ao RH"
+        >
+          📥 Exportar Relatorio para RH
+        </button>
       </div>
 
       <div className="metric-grid">

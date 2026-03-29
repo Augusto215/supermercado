@@ -1,88 +1,63 @@
-import { NextResponse } from "next/server";
 import { loadRhidReportData } from "@/lib/rhid-report";
 
 export const dynamic = "force-dynamic";
-const DEFAULT_API_ROUTE_TIMEOUT_MS = 45_000;
-
-function getApiRouteTimeoutMs(): number {
-  const raw = Number((process.env.RHID_API_ROUTE_TIMEOUT_MS ?? "").trim());
-
-  if (!Number.isFinite(raw) || raw <= 0) {
-    return DEFAULT_API_ROUTE_TIMEOUT_MS;
-  }
-
-  return Math.max(5_000, Math.min(120_000, Math.floor(raw)));
-}
 
 function isTruthyParam(value: string | null): boolean {
-  if (!value) {
-    return false;
-  }
-
+  if (!value) return false;
   const normalized = value.trim().toLowerCase();
   return normalized === "1" || normalized === "true" || normalized === "yes";
 }
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
-  const timeoutPromise = new Promise<T>((_, reject) => {
-    timeoutId = setTimeout(() => {
-      reject(new Error(`Timeout na rota /api/data apos ${timeoutMs}ms.`));
-    }, timeoutMs);
-  });
-
-  return Promise.race([promise, timeoutPromise]).finally(() => {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
-  });
+function toDateString(value: string | null): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? trimmed : undefined;
 }
 
 export async function GET(request: Request) {
-  const startedAt = Date.now();
   const url = new URL(request.url);
   const forceRefresh = isTruthyParam(url.searchParams.get("refresh")) || isTruthyParam(url.searchParams.get("force"));
-  const timeoutMs = getApiRouteTimeoutMs();
-  console.log("[RHiD][API] GET /api/data iniciado", { forceRefresh, timeoutMs });
+  const dataIni   = toDateString(url.searchParams.get("dataIni"));
+  const dataFinal = toDateString(url.searchParams.get("dataFinal"));
 
-  try {
-    const report = await withTimeout(loadRhidReportData({ forceRefresh }), timeoutMs);
-    console.log("[RHiD][API] GET /api/data sucesso", {
-      tempoMs: Date.now() - startedAt,
-      forceRefresh,
-      sourceFile: report.sourceFile,
-      totalColaboradores: report.processedRows.length,
-      totalWarnings: report.warnings.length
-    });
-    console.log("[RHiD][API] Warnings retornados", report.warnings);
+  const encoder = new TextEncoder();
 
-    return NextResponse.json(report, {
-      headers: {
-        "Cache-Control": "no-store"
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (payload: object) => {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
+      };
+
+      try {
+        const report = await loadRhidReportData({
+          forceRefresh,
+          dataIni,
+          dataFinal,
+          onProgress: (current, total) => send({ type: "progress", current, total }),
+        });
+
+        send({ type: "done", report });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const isTimeout = /timeout/i.test(message);
+        send({
+          type: "error",
+          status: isTimeout ? 504 : 500,
+          message: isTimeout
+            ? "Tempo limite excedido ao carregar dados da API RHiD."
+            : "Falha ao carregar dados da API RHiD.",
+        });
+      } finally {
+        controller.close();
       }
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const isTimeout = /timeout/i.test(message);
-    console.error("[RHiD][API] GET /api/data falhou", {
-      tempoMs: Date.now() - startedAt,
-      error,
-      isTimeout
-    });
+    },
+  });
 
-    return NextResponse.json(
-      {
-        error: isTimeout
-          ? "Tempo limite excedido ao carregar dados da API RHiD."
-          : "Falha ao carregar dados da API RHiD."
-      },
-      {
-        status: isTimeout ? 504 : 500,
-        headers: {
-          "Cache-Control": "no-store"
-        }
-      }
-    );
-  }
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-store",
+      "Connection":    "keep-alive",
+    },
+  });
 }

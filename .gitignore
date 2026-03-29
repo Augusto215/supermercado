@@ -10,3 +10,4 @@ pnpm-debug.log*
 .env
 .env.*
 !.env.example
+data/rhid-report-db.json
