@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     sameSite: "lax",
     path: "/",
     maxAge: SESSION_MAX_AGE,
-    secure: process.env.NODE_ENV === "production",
+    secure: process.env.HTTPS === "true",
   });
 
   return response;
