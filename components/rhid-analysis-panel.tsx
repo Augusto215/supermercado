@@ -95,16 +95,41 @@ export function RhidAnalysisPanel({ report, onReportUpdate }: RhidAnalysisPanelP
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      const response = await fetch("/api/data", {
-        cache: "no-store"
-      });
+      const response = await fetch("/api/data?refresh=true", { cache: "no-store" });
 
-      if (!response.ok) {
-        throw new Error("Falha ao atualizar dados");
+      if (!response.body) throw new Error("Resposta sem corpo.");
+
+      const reader  = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer    = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data:")) continue;
+
+          let event: Record<string, unknown>;
+          try {
+            event = JSON.parse(trimmed.slice(5).trim()) as Record<string, unknown>;
+          } catch {
+            continue;
+          }
+
+          if (event.type === "done") {
+            onReportUpdate(event.report as import("@/lib/types").RhidReportData);
+          } else if (event.type === "error") {
+            throw new Error(event.message as string);
+          }
+        }
       }
-
-      const newReport = await response.json();
-      onReportUpdate(newReport);
     } catch (error) {
       console.error("Erro ao atualizar dados RHiD:", error);
       alert("Erro ao atualizar dados da API RHiD.");

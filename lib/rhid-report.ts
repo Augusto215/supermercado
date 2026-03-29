@@ -297,13 +297,12 @@ function extractMetricsFromApuracao(
       diaFalta += 1;
     }
 
-    faltaEAtrasoMin +=
-      (dia.atrasoEntrada ?? 0) +
-      (dia.saidaAntecipada ?? 0) +
-      (dia.horasApenasFalta ?? 0);
+    const diaTotalAtraso = (dia.atrasoEntrada ?? 0) + (dia.saidaAntecipada ?? 0) + (dia.horasApenasFalta ?? 0);
 
-    // Conta dias com atraso na entrada
-    if ((dia.atrasoEntrada ?? 0) > 0) {
+    faltaEAtrasoMin += diaTotalAtraso;
+
+    // Conta dias com qualquer minuto de atraso/saída antecipada/falta parcial
+    if (diaTotalAtraso > 0 && dia.faltaDiaInteiro !== true) {
       quantidadeAtrasos += 1;
     }
 
