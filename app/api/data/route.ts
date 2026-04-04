@@ -14,11 +14,18 @@ function toDateString(value: string | null): string | undefined {
   return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? trimmed : undefined;
 }
 
+function toCompanyIds(value: string | null): number[] | undefined {
+  if (!value) return undefined;
+  const ids = value.split(",").map((v) => parseInt(v.trim(), 10)).filter((n) => Number.isFinite(n) && n > 0);
+  return ids.length > 0 ? ids : undefined;
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const forceRefresh = isTruthyParam(url.searchParams.get("refresh")) || isTruthyParam(url.searchParams.get("force"));
-  const dataIni   = toDateString(url.searchParams.get("dataIni"));
-  const dataFinal = toDateString(url.searchParams.get("dataFinal"));
+  const dataIni    = toDateString(url.searchParams.get("dataIni"));
+  const dataFinal  = toDateString(url.searchParams.get("dataFinal"));
+  const companyIds = toCompanyIds(url.searchParams.get("companyIds"));
 
   const encoder = new TextEncoder();
 
@@ -33,6 +40,7 @@ export async function GET(request: Request) {
           forceRefresh,
           dataIni,
           dataFinal,
+          companyIds,
           onProgress: (current, total) => send({ type: "progress", current, total }),
         });
 

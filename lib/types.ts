@@ -53,6 +53,8 @@ export interface RhidRawRow {
 export interface RhidProcessedRow {
   id: string;
   nome: string;
+  departamento: string;
+  cargo: string;
   faltas: number;
   atrasoTotalMin: number;
   quantidadeAtrasos: number;

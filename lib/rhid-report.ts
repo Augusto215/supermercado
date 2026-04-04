@@ -191,7 +191,7 @@ function getActivePersonStatuses(): number[] {
   return Array.from(new Set(candidates)).sort((a, b) => a - b);
 }
 
-function getReportCacheKey(period: ReportPeriod): string {
+function getReportCacheKey(period: ReportPeriod, companyIds?: number[]): string {
   const token = getEffectiveRhidToken().trim();
   return JSON.stringify({
     token,
@@ -202,6 +202,7 @@ function getReportCacheKey(period: ReportPeriod): string {
     chunkDays: getApuracaoChunkDays(),
     concurrency: getApuracaoConcurrency(),
     activeStatuses: getActivePersonStatuses(),
+    companyIds: companyIds ? [...companyIds].sort((a, b) => a - b) : null,
   });
 }
 
@@ -301,8 +302,8 @@ function extractMetricsFromApuracao(
 
     faltaEAtrasoMin += diaTotalAtraso;
 
-    // Conta dias com qualquer minuto de atraso/saída antecipada/falta parcial
-    if (diaTotalAtraso > 0 && dia.faltaDiaInteiro !== true) {
+    // Conta dias com atraso acima da tolerância de 15 minutos
+    if (diaTotalAtraso > 15 && dia.faltaDiaInteiro !== true) {
       quantidadeAtrasos += 1;
     }
 
@@ -671,6 +672,8 @@ export function processRows(
     return {
       id: row.id,
       nome: row.nome,
+      departamento: "",   // preenchido em loadRhidReportData
+      cargo: "",          // preenchido em loadRhidReportData
       faltas,
       atrasoTotalMin,
       quantidadeAtrasos,
@@ -786,6 +789,7 @@ interface LoadRhidReportOptions {
   prefetchedDirectoryData?: RhidDirectoryData;
   dataIni?: string;
   dataFinal?: string;
+  companyIds?: number[];
   onProgress?: (current: number, total: number) => void;
 }
 
@@ -793,7 +797,8 @@ export async function loadRhidReportData(
   options?: LoadRhidReportOptions
 ): Promise<RhidReportData> {
   const period = resolvePeriod(options?.dataIni, options?.dataFinal);
-  const cacheKey = getReportCacheKey(period);
+  const companyIds = options?.companyIds?.length ? options.companyIds : undefined;
+  const cacheKey = getReportCacheKey(period, companyIds);
   const now = Date.now();
   const ttlMs = getReportCacheTtlMs();
   const token = getEffectiveRhidToken().trim();
@@ -840,8 +845,15 @@ export async function loadRhidReportData(
     );
 
     const warnings = [...apiWarnings];
-    const { activePeople, inactiveCount, missingStatusCount } =
+    const { activePeople: allActivePeople, inactiveCount, missingStatusCount } =
       filterActivePeople(people);
+
+    // Filtro por empresa(s) selecionadas
+    const activePeople = companyIds
+      ? allActivePeople.filter((p) => p.idCompany !== undefined && companyIds.includes(p.idCompany))
+      : allActivePeople;
+
+    const filteredByCompanyCount = allActivePeople.length - activePeople.length;
 
     console.log(
       `[RHiD][LOAD] Ativos para apuração: ${activePeople.length} colaboradores`
@@ -860,6 +872,10 @@ export async function loadRhidReportData(
     if (missingStatusCount > 0)
       warnings.push(
         `${missingStatusCount} colaboradores ignorados por status ausente/invalido.`
+      );
+    if (companyIds && filteredByCompanyCount > 0)
+      warnings.push(
+        `${filteredByCompanyCount} colaboradores ignorados por nao pertencerem as empresas selecionadas.`
       );
 
     if (activePeople.length === 0) {
@@ -889,7 +905,36 @@ export async function loadRhidReportData(
 
     console.log("[RHiD][LOAD] Apuração concluída. Processando métricas...");
 
-    const processedRows = processRows(rawRows, period.diasUteis);
+    // Mapa id-departamento → nome
+    const deptNameMap = new Map<number, string>();
+    for (const dept of directoryData.departments) {
+      if (dept.id !== undefined && dept.name) deptNameMap.set(dept.id, dept.name);
+    }
+    // Mapa id-cargo (role) → nome
+    const roleNameMap = new Map<number, string>();
+    for (const role of directoryData.roles) {
+      if (role.id !== undefined && role.name) roleNameMap.set(role.id, role.name);
+    }
+    // Mapa id-pessoa → {departamento, cargo}
+    const personMetaMap = new Map<string, { departamento: string; cargo: string }>();
+    for (const person of activePeople) {
+      if (person.id !== undefined) {
+        personMetaMap.set(String(person.id), {
+          departamento: person.idDepartment ? (deptNameMap.get(person.idDepartment) ?? "") : "",
+          cargo: person.idRole ? (roleNameMap.get(person.idRole) ?? "") : "",
+        });
+      }
+    }
+
+    const rawProcessed = processRows(rawRows, period.diasUteis);
+    const processedRows = rawProcessed.map((row) => {
+      const meta = personMetaMap.get(row.id);
+      return {
+        ...row,
+        departamento: meta?.departamento ?? "",
+        cargo: meta?.cargo ?? "",
+      };
+    });
     const lists = buildLists(processedRows);
     const report: RhidReportData = {
       sourceFile: "RHiD API",

@@ -1,11 +1,17 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { RhidAnalysisPanel } from "@/components/rhid-analysis-panel";
 import { usePayroll } from "@/components/payroll-provider";
 import { FIELD_DEFINITIONS } from "@/lib/fields";
-import { exportRhidPainelReport } from "@/lib/export-csv";
+import { exportRhidPainelReport, type ExportPurchaseRow, type ExportCashDiffRow } from "@/lib/export-csv";
 import { type RhidReportData } from "@/lib/types";
+
+interface CompanyOption {
+  id: number;
+  name: string;
+  cnpj: string | null;
+}
 
 const MONTHS = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -14,9 +20,19 @@ const MONTHS = [
 
 type Mode = "competencia" | "intervalo";
 
+function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function capToToday(date: string): string {
+  const today = todayIso();
+  return date > today ? today : date;
+}
+
 function buildPeriod(mode: Mode, selectedMonth: string, dataIniCustom: string, dataFinalCustom: string) {
   if (mode === "intervalo") {
-    return { dataIni: dataIniCustom, dataFinal: dataFinalCustom };
+    return { dataIni: dataIniCustom, dataFinal: capToToday(dataFinalCustom) };
   }
   const [yearStr, monthStr] = selectedMonth.split("-");
   const year = Number(yearStr);
@@ -25,7 +41,7 @@ function buildPeriod(mode: Mode, selectedMonth: string, dataIniCustom: string, d
   const prevYear  = month === 1 ? year - 1 : year;
   return {
     dataIni:   `${prevYear}-${String(prevMonth).padStart(2, "0")}-21`,
-    dataFinal: `${year}-${String(month).padStart(2, "0")}-20`
+    dataFinal: capToToday(`${year}-${String(month).padStart(2, "0")}-20`)
   };
 }
 
@@ -63,11 +79,48 @@ export default function PainelPage(): JSX.Element {
   const [dataIniCustom, setDataIniCustom] = useState("");
   const [dataFinalCustom, setDataFinalCustom] = useState("");
 
+  // Empresas
+  const [companies, setCompanies]           = useState<CompanyOption[]>([]);
+  const [selectedCompanyIds, setSelectedCompanyIds] = useState<Set<number>>(new Set());
+  const [loadingCompanies, setLoadingCompanies] = useState(false);
+
   const [report, setReport]   = useState<RhidReportData | null>(null);
+  const [reportPeriod, setReportPeriod] = useState<{ dataIni: string; dataFinal: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [loadingCurrent, setLoadingCurrent] = useState(0);
   const [loadingTotal, setLoadingTotal]     = useState(0);
   const [error, setError]     = useState<string | null>(null);
+
+  // Carrega lista de empresas ao montar
+  useEffect(() => {
+    setLoadingCompanies(true);
+    fetch("/api/companies")
+      .then((r) => r.ok ? r.json() : [])
+      .then((data: CompanyOption[]) => {
+        setCompanies(data);
+        // seleciona todas por padrão
+        setSelectedCompanyIds(new Set(data.map((c) => c.id)));
+      })
+      .catch(() => { /* silencia — empresa fica sem filtro */ })
+      .finally(() => setLoadingCompanies(false));
+  }, []);
+
+  const toggleCompany = (id: number) => {
+    setSelectedCompanyIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAllCompanies = () => {
+    if (selectedCompanyIds.size === companies.length) {
+      setSelectedCompanyIds(new Set());
+    } else {
+      setSelectedCompanyIds(new Set(companies.map((c) => c.id)));
+    }
+  };
 
   const monthOptions = generateMonthOptions();
 
@@ -89,9 +142,12 @@ export default function PainelPage(): JSX.Element {
     return `${fmt(dataIni)} até ${fmt(dataFinal)}`;
   })();
 
-  const isReadyToLoad = mode === "competencia"
-    ? true
-    : Boolean(dataIniCustom && dataFinalCustom && dataIniCustom <= dataFinalCustom);
+  const hasCompanySelected = companies.length === 0 || selectedCompanyIds.size > 0;
+  const isReadyToLoad = hasCompanySelected && (
+    mode === "competencia"
+      ? true
+      : Boolean(dataIniCustom && dataFinalCustom && dataIniCustom <= dataFinalCustom)
+  );
 
   const loadReport = useCallback(async () => {
     const { dataIni, dataFinal } = buildPeriod(mode, selectedMonth, dataIniCustom, dataFinalCustom);
@@ -100,9 +156,15 @@ export default function PainelPage(): JSX.Element {
     setError(null);
     setLoadingCurrent(0);
     setLoadingTotal(0);
+    setReportPeriod({ dataIni, dataFinal });
 
     try {
-      const params   = new URLSearchParams({ dataIni, dataFinal });
+      const params = new URLSearchParams({ dataIni, dataFinal });
+      // Só envia filtro se não estiver com todas selecionadas (ou nenhuma)
+      const allSelected = selectedCompanyIds.size === companies.length;
+      if (!allSelected && selectedCompanyIds.size > 0) {
+        params.set("companyIds", Array.from(selectedCompanyIds).join(","));
+      }
       const response = await fetch(`/api/data?${params.toString()}`, {
         cache: "no-store",
       });
@@ -153,13 +215,35 @@ export default function PainelPage(): JSX.Element {
     } finally {
       setTimeout(() => setLoading(false), 300);
     }
-  }, [mode, selectedMonth, dataIniCustom, dataFinalCustom]);
+  }, [mode, selectedMonth, dataIniCustom, dataFinalCustom, selectedCompanyIds, companies.length]);
 
   const handleReset = () => {
     setReport(null);
+    setReportPeriod(null);
     setError(null);
     setLoadingCurrent(0);
     setLoadingTotal(0);
+  };
+
+  const handleExport = async () => {
+    if (!report) return;
+    setExporting(true);
+    try {
+      const [purchasesRes, cashRes] = await Promise.all([
+        fetch("/api/purchases"),
+        fetch("/api/cash-differences")
+      ]);
+      const purchases = (purchasesRes.ok ? (await purchasesRes.json()) : []) as ExportPurchaseRow[];
+      const cashDiffs = (cashRes.ok ? (await cashRes.json()) : []) as ExportCashDiffRow[];
+      exportRhidPainelReport(rows, report.processedRows, {
+        purchases,
+        cashDiffs,
+        dataIni:   reportPeriod?.dataIni,
+        dataFinal: reportPeriod?.dataFinal
+      });
+    } finally {
+      setExporting(false);
+    }
   };
 
   /* ── Carregando ── */
@@ -228,14 +312,14 @@ export default function PainelPage(): JSX.Element {
       <div className="page-stack">
         {/* Cabeçalho + exportar */}
         <section className="panel">
-          <div className="panel-head split" style={{ marginBottom: activeRules.length > 0 ? 16 : 0 }}>
+          <div className="panel-head split" style={{ marginBottom: 16 }}>
             <div>
               <h3>Análise RHiD</h3>
               <p>Relatório carregado com sucesso.</p>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn btn-primary" onClick={() => exportRhidPainelReport(rows, report.processedRows)}>
-                Exportar CSV
+              <button className="btn btn-primary" onClick={() => void handleExport()} disabled={exporting}>
+                {exporting ? "Exportando..." : "Exportar CSV"}
               </button>
               <button className="secondary-btn" onClick={handleReset}>
                 ← Novo relatório
@@ -243,24 +327,34 @@ export default function PainelPage(): JSX.Element {
             </div>
           </div>
 
-          {activeRules.length > 0 && (
-            <div className="rules-used-block">
-              <p className="rules-used-label">Regras aplicadas neste relatório</p>
-              <ul className="rules-used-list">
-                {activeRules.map((rule) => (
-                  <li key={rule.id} className="rules-used-item">
-                    <span className="rules-used-name">{rule.nome}</span>
-                    <span className="rules-used-desc">{rule.descricao}</span>
-                    <div className="rule-fields">
-                      {rule.campoImpacto.map((code) => (
-                        <span key={code} className="rule-field-chip">{fieldLabel(code)}</span>
-                      ))}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          <div className="rules-used-block">
+            <p className="rules-used-label">Regras aplicadas neste relatório</p>
+            <ul className="rules-used-list">
+              {/* Regra fixa do sistema */}
+              <li className="rules-used-item">
+                <span className="rules-used-name">Tolerância de atraso</span>
+                <span className="rules-used-desc">
+                  Atrasos de até 15 min não contam na quantidade de atrasos do colaborador.
+                </span>
+                <div className="rule-fields">
+                  <span className="rule-field-chip rule-field-chip-builtin">Sistema</span>
+                  <span className="rule-field-chip">Qtd Atrasos</span>
+                </div>
+              </li>
+              {/* Regras configuráveis ativas */}
+              {activeRules.map((rule) => (
+                <li key={rule.id} className="rules-used-item">
+                  <span className="rules-used-name">{rule.nome}</span>
+                  <span className="rules-used-desc">{rule.descricao}</span>
+                  <div className="rule-fields">
+                    {rule.campoImpacto.map((code) => (
+                      <span key={code} className="rule-field-chip">{fieldLabel(code)}</span>
+                    ))}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
         </section>
 
         <RhidAnalysisPanel report={report} onReportUpdate={setReport} />
@@ -313,6 +407,7 @@ export default function PainelPage(): JSX.Element {
           <button
             className="btn btn-primary"
             onClick={() => void loadReport()}
+            disabled={!isReadyToLoad}
           >
             Gerar relatório
           </button>
@@ -341,6 +436,7 @@ export default function PainelPage(): JSX.Element {
               className="selector-input"
               value={dataFinalCustom}
               min={dataIniCustom || undefined}
+              max={todayIso()}
               onChange={(e) => setDataFinalCustom(e.target.value)}
             />
           </div>
@@ -362,6 +458,42 @@ export default function PainelPage(): JSX.Element {
             <> &mdash; apuração de <strong>{periodLabel}</strong></>
           )}
         </p>
+      )}
+
+      {/* Seletor de empresa */}
+      {(loadingCompanies || companies.length > 0) && (
+        <div className="company-selector-block">
+          <div className="company-selector-head">
+            <span className="selector-label">Empresas</span>
+            {companies.length > 1 && (
+              <button className="company-toggle-all" onClick={toggleAllCompanies}>
+                {selectedCompanyIds.size === companies.length ? "Desmarcar todas" : "Selecionar todas"}
+              </button>
+            )}
+          </div>
+
+          {loadingCompanies ? (
+            <p className="company-loading">Carregando empresas...</p>
+          ) : (
+            <div className="company-list">
+              {companies.map((c) => (
+                <label key={c.id} className={`company-item${selectedCompanyIds.has(c.id) ? " selected" : ""}`}>
+                  <input
+                    type="checkbox"
+                    checked={selectedCompanyIds.has(c.id)}
+                    onChange={() => toggleCompany(c.id)}
+                  />
+                  <span className="company-name">{c.name}</span>
+                  {c.cnpj && <span className="company-cnpj">CNPJ: {c.cnpj}</span>}
+                </label>
+              ))}
+            </div>
+          )}
+
+          {!loadingCompanies && selectedCompanyIds.size === 0 && (
+            <p className="company-warn">Selecione ao menos uma empresa para gerar o relatório.</p>
+          )}
+        </div>
       )}
     </section>
   );

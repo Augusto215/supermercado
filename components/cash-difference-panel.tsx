@@ -1,6 +1,7 @@
 "use client";
 
 import { type ChangeEvent, useEffect, useMemo, useState } from "react";
+import * as XLSX from "xlsx";
 
 const CASH_DIFFERENCE_LIMIT = 1.05;
 
@@ -140,16 +141,68 @@ function parseDateLabel(value: string): string {
   return trimmed;
 }
 
+function isRhidReportFormat(headers: string[]): boolean {
+  return (
+    headers.some((h) => h === "tipo processamento" || h === "tipo de processamento") &&
+    headers.some((h) => h === "funcionario") &&
+    headers.some((h) => h.includes("226") && h.includes("diferenca"))
+  );
+}
+
+function parseRhidReportCashRows(matrix: string[][]): CashDifferenceRow[] {
+  const headers   = matrix[0].map((h) => normalizeText(h));
+  const funcIdx   = headers.findIndex((h) => h === "funcionario");
+  const diffIdx   = headers.findIndex((h) => h.includes("226") && h.includes("diferenca"));
+
+  if (funcIdx === -1 || diffIdx === -1) {
+    throw new Error("Formato RHiD: nao foi possivel localizar colunas 'Funcionario' ou '226 - Diferenca de Caixa'.");
+  }
+
+  const result: CashDifferenceRow[] = [];
+  for (let i = 1; i < matrix.length; i++) {
+    const line      = matrix[i];
+    const operador  = (line[funcIdx] ?? "").trim();
+    const diferenca = parseNumber(line[diffIdx] ?? "");
+
+    if (!operador || diferenca === null) continue;
+
+    result.push({ id: `cash-${i}`, operador, dia: "Mensal", valorEsperado: null, valorContado: null, diferenca });
+  }
+  return result;
+}
+
+// Termos que só aparecem em células de cabeçalho — não em títulos livres
+const HEADER_EXACT = ["operadoras", "operadora", "operador", "data", "dia", "valor", "diferenca", "esperado", "contado", "colaborador", "funcionario"];
+
+function isHeaderRow(row: string[]): boolean {
+  const normalized = row.map((h) => normalizeText(h));
+  const exactMatches = normalized.filter((h) => HEADER_EXACT.includes(h)).length;
+  return exactMatches >= 2;
+}
+
+function findHeaderRow(matrix: string[][]): number {
+  for (let i = 0; i < Math.min(matrix.length, 10); i++) {
+    if (isHeaderRow(matrix[i])) return i;
+  }
+  return 0;
+}
+
 function parseCashRows(text: string): CashDifferenceRow[] {
   const delimiter = detectDelimiter(text);
   const matrix    = parseDelimited(text, delimiter);
 
   if (matrix.length < 2) throw new Error("Planilha sem dados suficientes para calcular diferenca de caixa.");
 
-  const headers = matrix[0].map((h) => normalizeText(h));
-  const operadorIdx   = findColumn(headers, ["operador", "colaborador", "funcionario", "nome", "caixa"]);
+  const headerRowIdx = findHeaderRow(matrix);
+  const headers = matrix[headerRowIdx].map((h) => normalizeText(h));
+
+  if (isRhidReportFormat(headers)) {
+    return parseRhidReportCashRows(matrix.slice(headerRowIdx));
+  }
+
+  const operadorIdx   = findColumn(headers, ["operadoras", "operadora", "operador", "colaborador", "funcionario", "nome", "caixa"]);
   const diaIdx        = findColumn(headers, ["dia", "data", "periodo", "movimento"]);
-  const diferencaIdx  = findColumn(headers, ["diferenca", "diferença", "quebra", "sobra"]);
+  const diferencaIdx  = findColumn(headers, ["valor", "diferenca", "diferença", "quebra", "sobra"]);
   const esperadoIdx   = findColumn(headers, ["esperado", "teorico", "sistema", "valor sistema", "total sistema"]);
   const contadoIdx    = findColumn(headers, ["contado", "apurado", "real", "fechamento", "valor contado"]);
 
@@ -158,12 +211,20 @@ function parseCashRows(text: string): CashDifferenceRow[] {
   }
 
   const result: CashDifferenceRow[] = [];
-  for (let i = 1; i < matrix.length; i++) {
+  for (let i = headerRowIdx + 1; i < matrix.length; i++) {
     const line = matrix[i];
     const get  = (idx: number) => (idx >= 0 ? line[idx] ?? "" : "");
 
-    const operador     = get(operadorIdx).trim() || `Linha ${i + 1}`;
-    const dia          = parseDateLabel(get(diaIdx));
+    const operadorRaw  = get(operadorIdx).trim();
+    const operador     = operadorRaw;
+
+    // Pula linhas sem nome real ou que sejam totalizadores
+    if (!operador || /^total[:\s]*/i.test(operador)) continue;
+
+    const diaRaw = get(diaIdx).trim();
+    if (/^total[:\s]*/i.test(diaRaw)) continue;
+
+    const dia          = parseDateLabel(diaRaw);
     const valorEsperado = parseNumber(get(esperadoIdx));
     const valorContado  = parseNumber(get(contadoIdx));
     const diferencaDireta = parseNumber(get(diferencaIdx));
@@ -176,11 +237,35 @@ function parseCashRows(text: string): CashDifferenceRow[] {
 
     result.push({ id: `cash-${i}`, operador, dia, valorEsperado, valorContado, diferenca });
   }
-  return result;
+
+  // Agrupa por operador, somando as diferenças
+  const byOperador = new Map<string, CashDifferenceRow>();
+  for (const row of result) {
+    const key = row.operador.toLowerCase().trim();
+    const existing = byOperador.get(key);
+    if (existing) {
+      existing.diferenca = Number((existing.diferenca + row.diferenca).toFixed(2));
+      existing.dia = "Múltiplos";
+      existing.valorEsperado = null;
+      existing.valorContado = null;
+    } else {
+      byOperador.set(key, { ...row });
+    }
+  }
+
+  return Array.from(byOperador.values());
 }
 
 async function readSpreadsheetText(file: File): Promise<string> {
   const buffer = await file.arrayBuffer();
+
+  const isXlsx = file.name.match(/\.(xlsx|xls|ods)$/i);
+  if (isXlsx) {
+    const workbook = XLSX.read(new Uint8Array(buffer), { type: "array" });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    return XLSX.utils.sheet_to_csv(sheet, { FS: ";", blankrows: false });
+  }
+
   let text = new TextDecoder("utf-8", { fatal: false }).decode(buffer);
   if (text.includes("\uFFFD")) text = new TextDecoder("latin1").decode(buffer);
   return text;

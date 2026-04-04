@@ -44,6 +44,7 @@ export interface RhidPersonDTO {
   registration?: string;
   code?: number;
   idDepartment?: number;
+  idRole?: number;
   idCompany?: number;
   status?: number;
 }
@@ -54,9 +55,22 @@ export interface RhidDepartmentDTO {
   idCompany?: number;
 }
 
+export interface RhidCompanyDTO {
+  id?: number;
+  name?: string;
+  cnpj?: string;
+}
+
+export interface RhidRoleDTO {
+  id?: number;
+  name?: string;
+}
+
 export interface RhidDirectoryData {
   people: RhidPersonDTO[];
   departments: RhidDepartmentDTO[];
+  companies: RhidCompanyDTO[];
+  roles: RhidRoleDTO[];
   warnings: string[];
   token: string | null;
 }
@@ -828,10 +842,15 @@ async function refreshToken(force: boolean, previousToken: string | null): Promi
     return runtimeToken;
   }
 
-  const refreshPromise = (async () => {
-    const nextToken = await requestLoginToken(previousToken);
-    runtimeToken = nextToken;
-    return nextToken;
+  const refreshPromise = (async (): Promise<string | null> => {
+    try {
+      const nextToken = await requestLoginToken(previousToken);
+      runtimeToken = nextToken;
+      return nextToken;
+    } catch (error) {
+      console.error("[RHiD] Falha ao renovar token:", normalizeErrorMessage(error));
+      return null;
+    }
   })();
 
   tokenRefreshInFlight = refreshPromise;
@@ -1008,7 +1027,7 @@ function pageFingerprint<T>(records: T[]): string {
   return `${records.length}:${first}:${middle}:${last}`;
 }
 
-async function fetchPagedRecords<T>(resource: "person" | "department", token: string): Promise<T[]> {
+async function fetchPagedRecords<T>(resource: "person" | "department" | "company" | "role", token: string): Promise<T[]> {
   const allRecords: T[] = [];
   let start = 0;
   let expectedTotal: number | null = null;
@@ -1135,6 +1154,8 @@ export async function loadRhidDirectoryData(): Promise<RhidDirectoryData> {
     return {
       people: [],
       departments: [],
+      companies: [],
+      roles: [],
       warnings,
       token: null
     };
@@ -1177,6 +1198,8 @@ export async function loadRhidDirectoryData(): Promise<RhidDirectoryData> {
       return {
         people: [],
         departments: [],
+        companies: [],
+        roles: [],
         warnings,
         token: null
       };
@@ -1215,10 +1238,37 @@ export async function loadRhidDirectoryData(): Promise<RhidDirectoryData> {
     );
 
     console.log(`[RHiD][DIR] ✓ ${departments.length} departamentos carregados`);
+    console.log("[RHiD][DIR] Consultando empresas...");
+
+    let companies: RhidCompanyDTO[] = [];
+    try {
+      companies = await withTimeout(
+        fetchPagedRecords<RhidCompanyDTO>("company", activeToken),
+        timeoutMs,
+        "consulta de empresas"
+      );
+      console.log(`[RHiD][DIR] ✓ ${companies.length} empresas carregadas`);
+    } catch {
+      console.warn("[RHiD][DIR] Nao foi possivel carregar empresas — ignorando.");
+    }
+
+    let roles: RhidRoleDTO[] = [];
+    try {
+      roles = await withTimeout(
+        fetchPagedRecords<RhidRoleDTO>("role", activeToken),
+        timeoutMs,
+        "consulta de cargos"
+      );
+      console.log(`[RHiD][DIR] ✓ ${roles.length} cargos carregados`);
+    } catch {
+      console.warn("[RHiD][DIR] Nao foi possivel carregar cargos — ignorando.");
+    }
 
     const data: RhidDirectoryData = {
       people,
       departments,
+      companies,
+      roles,
       warnings,
       token: activeToken
     };
@@ -1273,6 +1323,8 @@ export async function loadRhidDirectoryData(): Promise<RhidDirectoryData> {
     return {
       people: [],
       departments: [],
+      companies: [],
+      roles: [],
       warnings,
       token
     };

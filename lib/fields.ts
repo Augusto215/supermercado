@@ -91,6 +91,13 @@ export const FIELD_ORDER = FIELD_DEFINITIONS.map((field) => field.key);
 
 export const DEFAULT_AUTOMATION_RULES: AutomationRuleConfig[] = [
   {
+    id: "contagem-atrasos",
+    nome: "Contagem de atrasos por dia",
+    descricao: "Conta cada dia em que o colaborador teve atraso na entrada ou saída antecipada. Se o dia tiver minutos de atraso/saída antecipada/falta parcial (e não for falta integral), soma +1 na QTD ATRASOS.",
+    campoImpacto: ["3490"],
+    ativo: true
+  },
+  {
     id: "faltas-para-atraso",
     nome: "Faltas para horas de atraso",
     descricao: "Converte faltas em horas de atraso automaticamente (1 falta = 7.33h).",

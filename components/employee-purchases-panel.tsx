@@ -97,6 +97,11 @@ export function EmployeePurchasesPanel(): JSX.Element {
   const [dia, setDia]             = useState(defaultDateValue);
   const [valor, setValor]         = useState("");
   const [error, setError]         = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editProduto, setEditProduto] = useState("");
+  const [editDia, setEditDia]     = useState("");
+  const [editValor, setEditValor] = useState("");
+  const [editFuncId, setEditFuncId] = useState("");
 
   const employeeOptions = useMemo(
     () =>
@@ -187,6 +192,54 @@ export function EmployeePurchasesPanel(): JSX.Element {
       setValor("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao salvar compra.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleStartEdit = (row: EmployeePurchase) => {
+    setEditingId(row.id);
+    setEditProduto(row.produto);
+    setEditDia(row.dia);
+    setEditValor(String(row.valor).replace(".", ","));
+    setEditFuncId(row.funcionarioId);
+    setError(null);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+  };
+
+  const handleSaveEdit = async (id: string) => {
+    const parsedValue = parseMoney(editValor);
+    if (parsedValue === null) { setError("Informe um valor valido maior que zero."); return; }
+    const selectedEmployee = employeeOptions.find((e) => e.id === editFuncId);
+    if (!selectedEmployee) { setError("Funcionario nao encontrado."); return; }
+
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/purchases/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          funcionarioId:   selectedEmployee.id,
+          funcionarioNome: selectedEmployee.nome,
+          produto:         editProduto.trim(),
+          dia:             editDia,
+          valor:           parsedValue
+        })
+      });
+
+      if (!res.ok) {
+        const err = (await res.json()) as { error?: string };
+        throw new Error(err.error ?? "Erro ao salvar.");
+      }
+
+      const updated = fromDb((await res.json()) as DbRow);
+      setPurchases((prev) => prev.map((r) => r.id === id ? updated : r));
+      setEditingId(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao editar compra.");
     } finally {
       setSaving(false);
     }
@@ -315,19 +368,51 @@ export function EmployeePurchasesPanel(): JSX.Element {
             </tr>
           </thead>
           <tbody>
-            {sortedPurchases.map((row) => (
-              <tr key={row.id}>
-                <td>{formatDate(row.dia)}</td>
-                <td>{row.funcionarioNome}</td>
-                <td><strong>{row.produto}</strong></td>
-                <td>{formatCurrency(row.valor)}</td>
-                <td>
-                  <button className="danger-btn" type="button" onClick={() => void handleRemove(row.id)}>
-                    Excluir
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {sortedPurchases.map((row) =>
+              editingId === row.id ? (
+                <tr key={row.id}>
+                  <td>
+                    <input className="filter-input" type="date" value={editDia} onChange={(e) => setEditDia(e.target.value)} />
+                  </td>
+                  <td>
+                    <select className="filter-input" value={editFuncId} onChange={(e) => setEditFuncId(e.target.value)}>
+                      {employeeOptions.map((e) => (
+                        <option key={e.id} value={e.id}>{e.nome}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <input className="filter-input" value={editProduto} onChange={(e) => setEditProduto(e.target.value)} />
+                  </td>
+                  <td>
+                    <input className="filter-input" inputMode="decimal" value={editValor} onChange={(e) => setEditValor(e.target.value)} />
+                  </td>
+                  <td style={{ display: "flex", gap: "0.4rem" }}>
+                    <button className="primary-btn" type="button" disabled={saving} onClick={() => void handleSaveEdit(row.id)}>
+                      Salvar
+                    </button>
+                    <button className="secondary-btn" type="button" onClick={handleCancelEdit}>
+                      Cancelar
+                    </button>
+                  </td>
+                </tr>
+              ) : (
+                <tr key={row.id}>
+                  <td>{formatDate(row.dia)}</td>
+                  <td>{row.funcionarioNome}</td>
+                  <td><strong>{row.produto}</strong></td>
+                  <td>{formatCurrency(row.valor)}</td>
+                  <td style={{ display: "flex", gap: "0.4rem" }}>
+                    <button className="secondary-btn" type="button" onClick={() => handleStartEdit(row)}>
+                      Editar
+                    </button>
+                    <button className="danger-btn" type="button" onClick={() => void handleRemove(row.id)}>
+                      Excluir
+                    </button>
+                  </td>
+                </tr>
+              )
+            )}
             {loaded && sortedPurchases.length === 0 && (
               <tr>
                 <td colSpan={5} className="empty-row">

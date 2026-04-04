@@ -167,6 +167,8 @@ export async function loadPayrollRows(): Promise<PayrollRow[]> {
         prefetchedDirectoryData: {
           people: activePeople,
           departments,
+          companies: [],
+          roles: [],
           warnings: [],
           token
         }
