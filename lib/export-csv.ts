@@ -171,6 +171,11 @@ export function exportRhidPainelReport(
     const purchases = purchasesByName.get(nameKey);
     const cashDiff  = cashByName.get(nameKey);
 
+    // Usa compras/vale do processed row se disponível (inclui edições manuais do painel),
+    // senão cai para o valor agregado pela lista bruta
+    const comprasValue = rhid?.compras !== undefined ? rhid.compras : purchases;
+    const valeValue    = rhid?.vale    !== undefined ? rhid.vale    : undefined;
+
     return {
       ...row,
       valores: {
@@ -182,8 +187,9 @@ export function exportRhidPainelReport(
           "325":  Math.max(0, roundTwo(rhid.valorValeRefeicao)),
           "3490": Math.max(0, toHours(rhid.atrasoTotalMin))
         } : {}),
-        ...(purchases !== undefined ? { "208": purchases } : {}),
-        ...(cashDiff  !== undefined ? { "226": cashDiff  } : {})
+        ...(comprasValue !== undefined ? { "208": comprasValue } : {}),
+        ...(valeValue    !== undefined ? { "460": valeValue    } : {}),
+        ...(cashDiff     !== undefined ? { "226": cashDiff     } : {})
       }
     };
   });

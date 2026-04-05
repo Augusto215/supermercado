@@ -94,7 +94,9 @@ type EditableField =
   | "alertaAtraso"
   | "motivoDesconto"
   | "valorDesconto"
-  | "valorValeRefeicao";
+  | "valorValeRefeicao"
+  | "compras"
+  | "vale";
 
 interface EditingCell {
   rowId: string;
@@ -247,14 +249,45 @@ function RankingList({ title, rows, metric, emptyLabel }: RankingListProps): JSX
   );
 }
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function normalizeName(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function roundTwo(value: number): number {
+  return Number(value.toFixed(2));
+}
+
 // ─── Main panel ───────────────────────────────────────────────────────────────
+
+interface PurchaseEntry {
+  funcionario_nome: string;
+  dia: string;
+  valor: number;
+}
+
+interface ValeEntry {
+  funcionario_nome: string;
+  dia: string;
+  valor: number;
+}
 
 interface RhidAnalysisPanelProps {
   report: RhidReportData;
   onReportUpdate: (report: RhidReportData) => void;
+  purchases?: PurchaseEntry[];
+  vales?: ValeEntry[];
+  dataIni?: string;
+  dataFinal?: string;
 }
 
-export function RhidAnalysisPanel({ report, onReportUpdate }: RhidAnalysisPanelProps): JSX.Element {
+export function RhidAnalysisPanel({ report, onReportUpdate, purchases, vales, dataIni, dataFinal }: RhidAnalysisPanelProps): JSX.Element {
   const [statusFilter, setStatusFilter] = useState<"TODOS" | "DESCONTAR" | "ALERTA_ATRASO">("TODOS");
   const [selectedDepts, setSelectedDepts] = useState<Set<string>>(new Set());
   const [deptDropdownOpen, setDeptDropdownOpen] = useState(false);
@@ -268,13 +301,42 @@ export function RhidAnalysisPanel({ report, onReportUpdate }: RhidAnalysisPanelP
 
   const { processedRows, summary, sourceFile, warnings } = report;
 
-  // Apply overrides to produce effective rows
+  // Agrega compras por nome normalizado, filtradas pelo período
+  const purchasesByName = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!purchases?.length) return map;
+    for (const p of purchases) {
+      const inRange = (!dataIni || p.dia >= dataIni) && (!dataFinal || p.dia <= dataFinal);
+      if (!inRange) continue;
+      const key = normalizeName(p.funcionario_nome);
+      map.set(key, roundTwo((map.get(key) ?? 0) + p.valor));
+    }
+    return map;
+  }, [purchases, dataIni, dataFinal]);
+
+  // Agrega vales por nome normalizado, filtrados pelo período
+  const valesByName = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!vales?.length) return map;
+    for (const v of vales) {
+      const inRange = (!dataIni || v.dia >= dataIni) && (!dataFinal || v.dia <= dataFinal);
+      if (!inRange) continue;
+      const key = normalizeName(v.funcionario_nome);
+      map.set(key, roundTwo((map.get(key) ?? 0) + v.valor));
+    }
+    return map;
+  }, [vales, dataIni, dataFinal]);
+
+  // Apply overrides to produce effective rows (inclui compras e vales calculados como valor inicial)
   const effectiveRows = useMemo<RhidProcessedRow[]>(
     () =>
-      processedRows.map((row) =>
-        overrides[row.id] ? { ...row, ...overrides[row.id] } : row
-      ),
-    [processedRows, overrides]
+      processedRows.map((row) => ({
+        compras: purchasesByName.get(normalizeName(row.nome)) ?? 0,
+        vale:    valesByName.get(normalizeName(row.nome)) ?? 0,
+        ...row,
+        ...(overrides[row.id] ?? {}),
+      })),
+    [processedRows, overrides, purchasesByName, valesByName]
   );
 
   // Recompute summary from effective rows
@@ -413,6 +475,14 @@ export function RhidAnalysisPanel({ report, onReportUpdate }: RhidAnalysisPanelP
       parsed = { alertaAtraso: rawValue };
     } else if (field === "motivoDesconto") {
       parsed = { motivoDesconto: rawValue };
+    } else if (field === "compras") {
+      const n = parseNumberInput(rawValue);
+      if (n === null) return;
+      parsed = { compras: Math.max(0, n) };
+    } else if (field === "vale") {
+      const n = parseNumberInput(rawValue);
+      if (n === null) return;
+      parsed = { vale: Math.max(0, n) };
     }
 
     if (!parsed) return;
@@ -423,10 +493,13 @@ export function RhidAnalysisPanel({ report, onReportUpdate }: RhidAnalysisPanelP
     };
     setOverrides(newOverrides);
 
-    // Compute new rows immediately for parent commit
-    const newRows = processedRows.map((row) =>
-      newOverrides[row.id] ? { ...row, ...newOverrides[row.id] } : row
-    );
+    // Compute new rows immediately for parent commit (inclui compras e vales calculados)
+    const newRows = processedRows.map((row) => ({
+      compras: purchasesByName.get(normalizeName(row.nome)) ?? 0,
+      vale:    valesByName.get(normalizeName(row.nome)) ?? 0,
+      ...row,
+      ...(newOverrides[row.id] ?? {}),
+    }));
     commitToParent(newRows);
   };
 
@@ -465,6 +538,8 @@ export function RhidAnalysisPanel({ report, onReportUpdate }: RhidAnalysisPanelP
       case "motivoDesconto":      return eff.motivoDesconto;
       case "valorDesconto":       return eff.valorDesconto.toFixed(2);
       case "valorValeRefeicao":   return eff.valorValeRefeicao.toFixed(2);
+      case "compras":             return (eff.compras ?? 0).toFixed(2);
+      case "vale":                return (eff.vale ?? 0).toFixed(2);
     }
   };
 
@@ -685,6 +760,8 @@ export function RhidAnalysisPanel({ report, onReportUpdate }: RhidAnalysisPanelP
               <th>Motivo desconto</th>
               <th>Valor a descontar</th>
               <th>Vale refeicao estimado</th>
+              <th>Compras</th>
+              <th>Vale</th>
             </tr>
           </thead>
           <tbody>
@@ -895,11 +972,39 @@ export function RhidAnalysisPanel({ report, onReportUpdate }: RhidAnalysisPanelP
                     onCancel={cancelEdit}
                   />
                 </td>
+
+                {/* Compras */}
+                <td className="editable-cell">
+                  <EditableCell
+                    displayValue={formatCurrency(row.compras ?? 0)}
+                    editInitial={editInitialFor(row, "compras")}
+                    type="number"
+                    isEditing={isEditing(row.id, "compras")}
+                    modified={isModified(row.id, "compras")}
+                    onStartEdit={() => startEdit(row.id, "compras")}
+                    onCommit={(v) => commitEdit(row.id, "compras", v)}
+                    onCancel={cancelEdit}
+                  />
+                </td>
+
+                {/* Vale */}
+                <td className="editable-cell">
+                  <EditableCell
+                    displayValue={formatCurrency(row.vale ?? 0)}
+                    editInitial={editInitialFor(row, "vale")}
+                    type="number"
+                    isEditing={isEditing(row.id, "vale")}
+                    modified={isModified(row.id, "vale")}
+                    onStartEdit={() => startEdit(row.id, "vale")}
+                    onCommit={(v) => commitEdit(row.id, "vale", v)}
+                    onCancel={cancelEdit}
+                  />
+                </td>
               </tr>
             ))}
             {filteredRows.length === 0 && (
               <tr>
-                <td colSpan={13} className="empty-row">
+                <td colSpan={15} className="empty-row">
                   Nenhum colaborador encontrado para esse filtro.
                 </td>
               </tr>

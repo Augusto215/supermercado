@@ -68,6 +68,10 @@ export interface RhidProcessedRow {
   valorDesconto: number;
   valorValeRefeicao: number;
   semEscala: boolean;
+  /** Total de compras do funcionário no período (pré-computado ou editado manualmente) */
+  compras?: number;
+  /** Total de vales do funcionário no período (pré-computado ou editado manualmente) */
+  vale?: number;
 }
 
 export interface RhidLists {

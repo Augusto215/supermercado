@@ -26,6 +26,7 @@ export async function GET(request: Request) {
   const dataIni    = toDateString(url.searchParams.get("dataIni"));
   const dataFinal  = toDateString(url.searchParams.get("dataFinal"));
   const companyIds = toCompanyIds(url.searchParams.get("companyIds"));
+  const cargoIds   = toCompanyIds(url.searchParams.get("cargoIds"));
 
   const encoder = new TextEncoder();
 
@@ -41,6 +42,7 @@ export async function GET(request: Request) {
           dataIni,
           dataFinal,
           companyIds,
+          cargoIds,
           onProgress: (current, total) => send({ type: "progress", current, total }),
         });
 

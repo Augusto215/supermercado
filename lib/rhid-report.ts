@@ -191,7 +191,7 @@ function getActivePersonStatuses(): number[] {
   return Array.from(new Set(candidates)).sort((a, b) => a - b);
 }
 
-function getReportCacheKey(period: ReportPeriod, companyIds?: number[]): string {
+function getReportCacheKey(period: ReportPeriod, companyIds?: number[], cargoIds?: number[]): string {
   const token = getEffectiveRhidToken().trim();
   return JSON.stringify({
     token,
@@ -203,6 +203,7 @@ function getReportCacheKey(period: ReportPeriod, companyIds?: number[]): string 
     concurrency: getApuracaoConcurrency(),
     activeStatuses: getActivePersonStatuses(),
     companyIds: companyIds ? [...companyIds].sort((a, b) => a - b) : null,
+    cargoIds: cargoIds ? [...cargoIds].sort((a, b) => a - b) : null,
   });
 }
 
@@ -790,6 +791,7 @@ interface LoadRhidReportOptions {
   dataIni?: string;
   dataFinal?: string;
   companyIds?: number[];
+  cargoIds?: number[];
   onProgress?: (current: number, total: number) => void;
 }
 
@@ -798,7 +800,8 @@ export async function loadRhidReportData(
 ): Promise<RhidReportData> {
   const period = resolvePeriod(options?.dataIni, options?.dataFinal);
   const companyIds = options?.companyIds?.length ? options.companyIds : undefined;
-  const cacheKey = getReportCacheKey(period, companyIds);
+  const cargoIds = options?.cargoIds?.length ? options.cargoIds : undefined;
+  const cacheKey = getReportCacheKey(period, companyIds, cargoIds);
   const now = Date.now();
   const ttlMs = getReportCacheTtlMs();
   const token = getEffectiveRhidToken().trim();
@@ -849,11 +852,18 @@ export async function loadRhidReportData(
       filterActivePeople(people);
 
     // Filtro por empresa(s) selecionadas
-    const activePeople = companyIds
+    const filteredByCompany = companyIds
       ? allActivePeople.filter((p) => p.idCompany !== undefined && companyIds.includes(p.idCompany))
       : allActivePeople;
 
-    const filteredByCompanyCount = allActivePeople.length - activePeople.length;
+    const filteredByCompanyCount = allActivePeople.length - filteredByCompany.length;
+
+    // Filtro por cargo(s) selecionados
+    const activePeople = cargoIds
+      ? filteredByCompany.filter((p) => p.idRole !== undefined && cargoIds.includes(p.idRole))
+      : filteredByCompany;
+
+    const filteredByCargoCount = filteredByCompany.length - activePeople.length;
 
     console.log(
       `[RHiD][LOAD] Ativos para apuração: ${activePeople.length} colaboradores`
@@ -876,6 +886,10 @@ export async function loadRhidReportData(
     if (companyIds && filteredByCompanyCount > 0)
       warnings.push(
         `${filteredByCompanyCount} colaboradores ignorados por nao pertencerem as empresas selecionadas.`
+      );
+    if (cargoIds && filteredByCargoCount > 0)
+      warnings.push(
+        `${filteredByCargoCount} colaboradores ignorados por nao pertencerem aos cargos selecionados.`
       );
 
     if (activePeople.length === 0) {

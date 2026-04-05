@@ -1027,7 +1027,7 @@ function pageFingerprint<T>(records: T[]): string {
   return `${records.length}:${first}:${middle}:${last}`;
 }
 
-async function fetchPagedRecords<T>(resource: "person" | "department" | "company" | "role", token: string): Promise<T[]> {
+async function fetchPagedRecords<T>(resource: "person" | "department" | "company" | "cargo", token: string): Promise<T[]> {
   const allRecords: T[] = [];
   let start = 0;
   let expectedTotal: number | null = null;
@@ -1255,7 +1255,7 @@ export async function loadRhidDirectoryData(): Promise<RhidDirectoryData> {
     let roles: RhidRoleDTO[] = [];
     try {
       roles = await withTimeout(
-        fetchPagedRecords<RhidRoleDTO>("role", activeToken),
+        fetchPagedRecords<RhidRoleDTO>("cargo", activeToken),
         timeoutMs,
         "consulta de cargos"
       );

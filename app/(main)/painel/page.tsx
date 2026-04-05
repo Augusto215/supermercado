@@ -1,11 +1,28 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { RhidAnalysisPanel } from "@/components/rhid-analysis-panel";
 import { usePayroll } from "@/components/payroll-provider";
 import { FIELD_DEFINITIONS } from "@/lib/fields";
 import { exportRhidPainelReport, type ExportPurchaseRow, type ExportCashDiffRow } from "@/lib/export-csv";
 import { type RhidReportData } from "@/lib/types";
+
+interface PurchaseRow {
+  id: string;
+  funcionario_nome: string;
+  produto: string;
+  dia: string;
+  valor: number;
+}
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 2 }).format(value);
+}
+
+function formatDate(isoDate: string): string {
+  if (!isoDate) return "";
+  return new Date(`${isoDate}T00:00:00`).toLocaleDateString("pt-BR");
+}
 
 interface CompanyOption {
   id: number;
@@ -86,6 +103,8 @@ export default function PainelPage(): JSX.Element {
 
   const [report, setReport]   = useState<RhidReportData | null>(null);
   const [reportPeriod, setReportPeriod] = useState<{ dataIni: string; dataFinal: string } | null>(null);
+  const [purchases, setPurchases] = useState<PurchaseRow[]>([]);
+  const [vales, setVales] = useState<PurchaseRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [loadingCurrent, setLoadingCurrent] = useState(0);
@@ -201,6 +220,14 @@ export default function PainelPage(): JSX.Element {
             setLoadingTotal(event.total as number);
           } else if (event.type === "done") {
             setReport(event.report as RhidReportData);
+            fetch("/api/purchases")
+              .then((r) => r.ok ? r.json() : [])
+              .then((data: PurchaseRow[]) => { if (Array.isArray(data)) setPurchases(data); })
+              .catch(() => {});
+            fetch("/api/vales")
+              .then((r) => r.ok ? r.json() : [])
+              .then((data: PurchaseRow[]) => { if (Array.isArray(data)) setVales(data); })
+              .catch(() => {});
           } else if (event.type === "error") {
             throw new Error(event.message as string);
           }
@@ -220,6 +247,8 @@ export default function PainelPage(): JSX.Element {
   const handleReset = () => {
     setReport(null);
     setReportPeriod(null);
+    setPurchases([]);
+    setVales([]);
     setError(null);
     setLoadingCurrent(0);
     setLoadingTotal(0);
@@ -357,7 +386,14 @@ export default function PainelPage(): JSX.Element {
           </div>
         </section>
 
-        <RhidAnalysisPanel report={report} onReportUpdate={setReport} />
+        <RhidAnalysisPanel
+          report={report}
+          onReportUpdate={setReport}
+          purchases={purchases}
+          vales={vales}
+          dataIni={reportPeriod?.dataIni}
+          dataFinal={reportPeriod?.dataFinal}
+        />
       </div>
     );
   }
