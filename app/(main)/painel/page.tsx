@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { RhidAnalysisPanel } from "@/components/rhid-analysis-panel";
 import { usePayroll } from "@/components/payroll-provider";
 import { FIELD_DEFINITIONS } from "@/lib/fields";
-import { exportRhidPainelReport, type ExportPurchaseRow, type ExportCashDiffRow } from "@/lib/export-csv";
+import { exportRhidPainelReport, type ExportPurchaseRow, type ExportCashDiffRow, type ExportValeRow } from "@/lib/export-csv";
 import { type RhidReportData } from "@/lib/types";
 
 interface PurchaseRow {
@@ -258,14 +258,17 @@ export default function PainelPage(): JSX.Element {
     if (!report) return;
     setExporting(true);
     try {
-      const [purchasesRes, cashRes] = await Promise.all([
+      const [purchasesRes, valesRes, cashRes] = await Promise.all([
         fetch("/api/purchases"),
+        fetch("/api/vales"),
         fetch("/api/cash-differences")
       ]);
       const purchases = (purchasesRes.ok ? (await purchasesRes.json()) : []) as ExportPurchaseRow[];
-      const cashDiffs = (cashRes.ok ? (await cashRes.json()) : []) as ExportCashDiffRow[];
+      const valesData = (valesRes.ok    ? (await valesRes.json())    : []) as ExportValeRow[];
+      const cashDiffs = (cashRes.ok     ? (await cashRes.json())     : []) as ExportCashDiffRow[];
       exportRhidPainelReport(rows, report.processedRows, {
         purchases,
+        vales:    valesData,
         cashDiffs,
         dataIni:   reportPeriod?.dataIni,
         dataFinal: reportPeriod?.dataFinal

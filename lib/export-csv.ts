@@ -101,12 +101,19 @@ export interface ExportCashDiffRow {
   diferenca: number;
 }
 
+export interface ExportValeRow {
+  funcionario_nome: string;
+  dia: string;
+  valor: number;
+}
+
 export interface ExportExtras {
   purchases?: ExportPurchaseRow[];
+  vales?: ExportValeRow[];
   cashDiffs?: ExportCashDiffRow[];
-  /** ISO date "YYYY-MM-DD" — filtra compras a partir desta data */
+  /** ISO date "YYYY-MM-DD" — filtra compras/vales a partir desta data */
   dataIni?: string;
-  /** ISO date "YYYY-MM-DD" — filtra compras até esta data */
+  /** ISO date "YYYY-MM-DD" — filtra compras/vales até esta data */
   dataFinal?: string;
 }
 
@@ -156,6 +163,19 @@ export function exportRhidPainelReport(
     }
   }
 
+  // Agrega vales por funcionário (filtrado pelo período)
+  const valesByName = new Map<string, number>();
+  if (extras?.vales?.length) {
+    for (const v of extras.vales) {
+      const inRange =
+        (!extras.dataIni   || v.dia >= extras.dataIni) &&
+        (!extras.dataFinal || v.dia <= extras.dataFinal);
+      if (!inRange) continue;
+      const key = normalizeName(v.funcionario_nome);
+      valesByName.set(key, roundTwo((valesByName.get(key) ?? 0) + v.valor));
+    }
+  }
+
   // Agrega diferença de caixa por operador
   const cashByName = new Map<string, number>();
   if (extras?.cashDiffs?.length) {
@@ -174,7 +194,7 @@ export function exportRhidPainelReport(
     // Usa compras/vale do processed row se disponível (inclui edições manuais do painel),
     // senão cai para o valor agregado pela lista bruta
     const comprasValue = rhid?.compras !== undefined ? rhid.compras : purchases;
-    const valeValue    = rhid?.vale    !== undefined ? rhid.vale    : undefined;
+    const valeValue    = rhid?.vale    !== undefined ? rhid.vale    : valesByName.get(nameKey);
 
     return {
       ...row,
