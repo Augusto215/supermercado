@@ -95,6 +95,7 @@ type EditableField =
   | "motivoDesconto"
   | "valorDesconto"
   | "valorValeRefeicao"
+  | "diasAbono"
   | "compras"
   | "vale";
 
@@ -467,6 +468,10 @@ export function RhidAnalysisPanel({ report, onReportUpdate, purchases, vales, da
       const n = parseNumberInput(rawValue);
       if (n === null) return;
       parsed = { [field]: n };
+    } else if (field === "diasAbono") {
+      const n = parseNumberInput(rawValue);
+      if (n === null) return;
+      parsed = { diasAbono: Math.max(0, n) };
     } else if (field === "statusFaltas") {
       if (rawValue !== "DESCONTAR" && rawValue !== "OK") return;
       parsed = { statusFaltas: rawValue };
@@ -538,6 +543,7 @@ export function RhidAnalysisPanel({ report, onReportUpdate, purchases, vales, da
       case "motivoDesconto":      return eff.motivoDesconto;
       case "valorDesconto":       return eff.valorDesconto.toFixed(2);
       case "valorValeRefeicao":   return eff.valorValeRefeicao.toFixed(2);
+      case "diasAbono":           return String(eff.diasAbono ?? 0);
       case "compras":             return (eff.compras ?? 0).toFixed(2);
       case "vale":                return (eff.vale ?? 0).toFixed(2);
     }
@@ -747,21 +753,22 @@ export function RhidAnalysisPanel({ report, onReportUpdate, purchases, vales, da
         <table className="rhid-table">
           <thead>
             <tr>
-              <th>Nome</th>
-              <th>Faltas</th>
+              <th>Funcionario</th>
+              <th>43 - FALTAS</th>
               <th>Qtd atrasos</th>
-              <th>Atraso total</th>
+              <th>3490 - FALTAS ATRASO HORAS</th>
               <th>Extras totais</th>
-              <th>Extras a pagar</th>
+              <th>150 - HORAS EXTRAS 50%</th>
               <th>Extras p/ banco</th>
               <th>Banco de horas</th>
               <th>Status faltas</th>
               <th>Alerta atraso</th>
               <th>Motivo desconto</th>
-              <th>Valor a descontar</th>
-              <th>Vale refeicao estimado</th>
-              <th>Compras</th>
-              <th>Vale</th>
+              <th>44 - DESCONTO DSR (D)</th>
+              <th>325 - VALE REFEIÇÃO</th>
+              <th>Atestado/Folga (dias)</th>
+              <th>208 - COMPRAS</th>
+              <th>460 - VALE</th>
             </tr>
           </thead>
           <tbody>
@@ -973,6 +980,22 @@ export function RhidAnalysisPanel({ report, onReportUpdate, purchases, vales, da
                   />
                 </td>
 
+                {/* Atestado / Folga (dias) */}
+                <td className={row.semEscala ? "" : "editable-cell"}>
+                  {row.semEscala ? "--" : (
+                    <EditableCell
+                      displayValue={String(row.diasAbono ?? 0)}
+                      editInitial={editInitialFor(row, "diasAbono")}
+                      type="number"
+                      isEditing={isEditing(row.id, "diasAbono")}
+                      modified={isModified(row.id, "diasAbono")}
+                      onStartEdit={() => startEdit(row.id, "diasAbono")}
+                      onCommit={(v) => commitEdit(row.id, "diasAbono", v)}
+                      onCancel={cancelEdit}
+                    />
+                  )}
+                </td>
+
                 {/* Compras */}
                 <td className="editable-cell">
                   <EditableCell
@@ -1004,7 +1027,7 @@ export function RhidAnalysisPanel({ report, onReportUpdate, purchases, vales, da
             ))}
             {filteredRows.length === 0 && (
               <tr>
-                <td colSpan={15} className="empty-row">
+                <td colSpan={16} className="empty-row">
                   Nenhum colaborador encontrado para esse filtro.
                 </td>
               </tr>

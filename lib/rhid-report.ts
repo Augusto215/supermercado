@@ -261,6 +261,7 @@ function extractMetricsFromApuracao(
   diaFalta: number;
   faltaEAtrasoMin: number;
   abonoMin: number;
+  diasAbono: number;
   extra100DMin: number;
   extraDiurnaMin: number;
   extraNoturnaMin: number;
@@ -284,7 +285,7 @@ function extractMetricsFromApuracao(
   let diaFalta = 0;
   let faltaEAtrasoMin = 0;
   let abonoMin = 0;
-  let extra100DMin = 0;
+  let diasAbono = 0;
   let extraDiurnaMin = 0;
   let extraNoturnaMin = 0;
   let bancoSaldoMin = 0;
@@ -308,8 +309,12 @@ function extractMetricsFromApuracao(
       quantidadeAtrasos += 1;
     }
 
-    abonoMin += dia.minutosAbono ?? 0;
-    extra100DMin += dia.extraDiurna ?? 0;
+    const minutosAbonoDia = dia.minutosAbono ?? 0;
+    abonoMin += minutosAbonoDia;
+    if (minutosAbonoDia > 0 || (dia.idJustification != null && dia.faltaDiaInteiro === true)) {
+      diasAbono += 1;
+    }
+    extraDiurnaMin += dia.extraDiurna ?? 0;
     extraNoturnaMin += dia.extraNoturna ?? 0;
     bancoSaldoMin += dia.saldoBancoCredDeb ?? 0;
   }
@@ -329,7 +334,8 @@ function extractMetricsFromApuracao(
     diaFalta,
     faltaEAtrasoMin,
     abonoMin,
-    extra100DMin,
+    diasAbono,
+    extra100DMin: 0,
     extraDiurnaMin,
     extraNoturnaMin,
     bancoTotalMin,
@@ -358,6 +364,7 @@ function baseRawRow(person: RhidPersonDTO, fallbackIndex: number): RhidRawRow {
     diaFalta: 0,
     faltaEAtrasoMin: 0,
     abonoMin: 0,
+    diasAbono: 0,
     extra100DMin: 0,
     extraDiurnaMin: 0,
     extraNoturnaMin: 0,
@@ -379,6 +386,7 @@ function mergeRawMetrics(
     diaFalta: base.diaFalta + (metrics.diaFalta ?? 0),
     faltaEAtrasoMin: base.faltaEAtrasoMin + (metrics.faltaEAtrasoMin ?? 0),
     abonoMin: base.abonoMin + (metrics.abonoMin ?? 0),
+    diasAbono: base.diasAbono + (metrics.diasAbono ?? 0),
     extra100DMin: base.extra100DMin + (metrics.extra100DMin ?? 0),
     extraDiurnaMin: base.extraDiurnaMin + (metrics.extraDiurnaMin ?? 0),
     extraNoturnaMin: base.extraNoturnaMin + (metrics.extraNoturnaMin ?? 0),
@@ -683,10 +691,11 @@ export function processRows(
       horasExtrasBancoMin,
       bancoHorasMin,
       statusFaltas,
-      alertaAtraso: atrasoTotalMin > 5 * 60 ? "ALERTA" : "OK",
+      alertaAtraso: quantidadeAtrasos > 0 ? "ALERTA" : "OK",
       motivoDesconto,
       valorDesconto,
       valorValeRefeicao,
+      diasAbono: row.diasAbono,
       semEscala: row.semEscala,
     };
   });

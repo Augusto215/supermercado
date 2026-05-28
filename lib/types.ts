@@ -41,6 +41,7 @@ export interface RhidRawRow {
   diaFalta: number;
   faltaEAtrasoMin: number;
   abonoMin: number;
+  diasAbono: number;
   extra100DMin: number;
   extraDiurnaMin: number;
   extraNoturnaMin: number;
@@ -67,6 +68,8 @@ export interface RhidProcessedRow {
   motivoDesconto: string;
   valorDesconto: number;
   valorValeRefeicao: number;
+  /** Dias de atestado/abono no período (justificados). */
+  diasAbono: number;
   semEscala: boolean;
   /** Total de compras do funcionário no período (pré-computado ou editado manualmente) */
   compras?: number;
