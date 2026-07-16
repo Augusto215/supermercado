@@ -3,6 +3,8 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { usePayroll } from "@/components/payroll-provider";
 
+type FormaPagamento = "avista" | "parcelado";
+
 interface EmployeeVale {
   id: string;
   funcionarioId: string;
@@ -10,6 +12,8 @@ interface EmployeeVale {
   descricao: string;
   dia: string;
   valor: number;
+  formaPagamento: FormaPagamento;
+  parcelas: number;
 }
 
 function formatCurrency(value: number): string {
@@ -74,17 +78,27 @@ interface DbRow {
   descricao: string;
   dia: string;
   valor: number;
+  forma_pagamento?: FormaPagamento;
+  parcelas?: number;
 }
 
 function fromDb(row: DbRow): EmployeeVale {
+  const parcelas = Number(row.parcelas ?? 1);
   return {
     id:              row.id,
     funcionarioId:   row.funcionario_id,
     funcionarioNome: row.funcionario_nome,
     descricao:       row.descricao,
     dia:             row.dia,
-    valor:           Number(row.valor)
+    valor:           Number(row.valor),
+    formaPagamento:  row.forma_pagamento === "parcelado" ? "parcelado" : "avista",
+    parcelas:        Number.isFinite(parcelas) && parcelas >= 1 ? parcelas : 1
   };
+}
+
+function formatPagamento(row: EmployeeVale): string {
+  if (row.formaPagamento !== "parcelado") return "À vista";
+  return `Parcelado ${row.parcelas}x de ${formatCurrency(row.valor / row.parcelas)}`;
 }
 
 export function EmployeeValesPanel(): JSX.Element {
@@ -96,12 +110,16 @@ export function EmployeeValesPanel(): JSX.Element {
   const [descricao, setDescricao]     = useState("");
   const [dia, setDia]                 = useState(defaultDateValue);
   const [valor, setValor]             = useState("");
+  const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>("avista");
+  const [parcelas, setParcelas]       = useState("2");
   const [error, setError]             = useState<string | null>(null);
   const [editingId, setEditingId]     = useState<string | null>(null);
   const [editDescricao, setEditDescricao] = useState("");
   const [editDia, setEditDia]         = useState("");
   const [editValor, setEditValor]     = useState("");
   const [editFuncId, setEditFuncId]   = useState("");
+  const [editFormaPagamento, setEditFormaPagamento] = useState<FormaPagamento>("avista");
+  const [editParcelas, setEditParcelas] = useState("2");
 
   const employeeOptions = useMemo(
     () =>
@@ -164,6 +182,11 @@ export function EmployeeValesPanel(): JSX.Element {
     if (!dia) { setError("Informe o dia do vale."); return; }
     const parsedValue = parseMoney(valor);
     if (parsedValue === null) { setError("Informe um valor valido maior que zero."); return; }
+    const parsedParcelas = formaPagamento === "parcelado" ? Number(parcelas) : 1;
+    if (formaPagamento === "parcelado" && (!Number.isInteger(parsedParcelas) || parsedParcelas < 2)) {
+      setError("Informe a quantidade de parcelas (minimo 2).");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -175,7 +198,9 @@ export function EmployeeValesPanel(): JSX.Element {
           funcionarioNome: selectedEmployee.nome,
           descricao:       nextDescricao,
           dia,
-          valor:           parsedValue
+          valor:           parsedValue,
+          formaPagamento,
+          parcelas:        parsedParcelas
         })
       });
 
@@ -188,6 +213,8 @@ export function EmployeeValesPanel(): JSX.Element {
       setVales((prev) => [created, ...prev]);
       setDescricao("");
       setValor("");
+      setFormaPagamento("avista");
+      setParcelas("2");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao salvar vale.");
     } finally {
@@ -201,6 +228,8 @@ export function EmployeeValesPanel(): JSX.Element {
     setEditDia(row.dia);
     setEditValor(String(row.valor).replace(".", ","));
     setEditFuncId(row.funcionarioId);
+    setEditFormaPagamento(row.formaPagamento);
+    setEditParcelas(String(row.formaPagamento === "parcelado" ? row.parcelas : 2));
     setError(null);
   };
 
@@ -213,6 +242,11 @@ export function EmployeeValesPanel(): JSX.Element {
     if (parsedValue === null) { setError("Informe um valor valido maior que zero."); return; }
     const selectedEmployee = employeeOptions.find((e) => e.id === editFuncId);
     if (!selectedEmployee) { setError("Funcionario nao encontrado."); return; }
+    const parsedParcelas = editFormaPagamento === "parcelado" ? Number(editParcelas) : 1;
+    if (editFormaPagamento === "parcelado" && (!Number.isInteger(parsedParcelas) || parsedParcelas < 2)) {
+      setError("Informe a quantidade de parcelas (minimo 2).");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -224,7 +258,9 @@ export function EmployeeValesPanel(): JSX.Element {
           funcionarioNome: selectedEmployee.nome,
           descricao:       editDescricao.trim(),
           dia:             editDia,
-          valor:           parsedValue
+          valor:           parsedValue,
+          formaPagamento:  editFormaPagamento,
+          parcelas:        parsedParcelas
         })
       });
 
@@ -257,7 +293,7 @@ export function EmployeeValesPanel(): JSX.Element {
       <div className="panel-head">
         <p className="section-kicker">Lancamento manual</p>
         <h3>Vales dos Funcionarios</h3>
-        <p>Registre manualmente cada vale informando funcionario, descricao, dia e valor.</p>
+        <p>Registre manualmente cada vale informando funcionario, descricao, dia, valor e forma de pagamento (a vista ou parcelado).</p>
         <div className="panel-badges">
           <span className="panel-badge">{metrics.totalLancamentos} lancamentos</span>
           <span className="panel-badge">Total registrado: {formatCurrency(metrics.valorTotal)}</span>
@@ -306,6 +342,33 @@ export function EmployeeValesPanel(): JSX.Element {
               placeholder="Ex.: 150,00"
             />
           </label>
+
+          <label className="manual-field">
+            <span>Pagamento</span>
+            <select
+              className="filter-input"
+              value={formaPagamento}
+              onChange={(e) => setFormaPagamento(e.target.value as FormaPagamento)}
+            >
+              <option value="avista">À vista</option>
+              <option value="parcelado">Parcelado</option>
+            </select>
+          </label>
+
+          {formaPagamento === "parcelado" && (
+            <label className="manual-field">
+              <span>Qtd. parcelas</span>
+              <input
+                className="filter-input"
+                type="number"
+                min={2}
+                step={1}
+                value={parcelas}
+                onChange={(e) => setParcelas(e.target.value)}
+                placeholder="Ex.: 3"
+              />
+            </label>
+          )}
         </div>
 
         <div className="manual-actions">
@@ -362,6 +425,7 @@ export function EmployeeValesPanel(): JSX.Element {
               <th>Funcionario</th>
               <th>Descricao</th>
               <th>Valor</th>
+              <th>Pagamento</th>
               <th>Acao</th>
             </tr>
           </thead>
@@ -385,6 +449,30 @@ export function EmployeeValesPanel(): JSX.Element {
                   <td>
                     <input className="filter-input" inputMode="decimal" value={editValor} onChange={(e) => setEditValor(e.target.value)} />
                   </td>
+                  <td>
+                    <div style={{ display: "flex", gap: "0.4rem" }}>
+                      <select
+                        className="filter-input"
+                        value={editFormaPagamento}
+                        onChange={(e) => setEditFormaPagamento(e.target.value as FormaPagamento)}
+                      >
+                        <option value="avista">À vista</option>
+                        <option value="parcelado">Parcelado</option>
+                      </select>
+                      {editFormaPagamento === "parcelado" && (
+                        <input
+                          className="filter-input"
+                          type="number"
+                          min={2}
+                          step={1}
+                          style={{ width: "5rem" }}
+                          value={editParcelas}
+                          onChange={(e) => setEditParcelas(e.target.value)}
+                          placeholder="Parc."
+                        />
+                      )}
+                    </div>
+                  </td>
                   <td style={{ display: "flex", gap: "0.4rem" }}>
                     <button className="primary-btn" type="button" disabled={saving} onClick={() => void handleSaveEdit(row.id)}>
                       Salvar
@@ -400,6 +488,7 @@ export function EmployeeValesPanel(): JSX.Element {
                   <td>{row.funcionarioNome}</td>
                   <td><strong>{row.descricao}</strong></td>
                   <td>{formatCurrency(row.valor)}</td>
+                  <td>{formatPagamento(row)}</td>
                   <td style={{ display: "flex", gap: "0.4rem" }}>
                     <button className="secondary-btn" type="button" onClick={() => handleStartEdit(row)}>
                       Editar
@@ -413,7 +502,7 @@ export function EmployeeValesPanel(): JSX.Element {
             )}
             {loaded && sortedVales.length === 0 && (
               <tr>
-                <td colSpan={5} className="empty-row">
+                <td colSpan={6} className="empty-row">
                   Nenhum vale registrado ainda.
                 </td>
               </tr>

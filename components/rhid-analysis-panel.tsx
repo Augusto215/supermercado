@@ -250,6 +250,63 @@ function RankingList({ title, rows, metric, emptyLabel }: RankingListProps): JSX
   );
 }
 
+// ─── Faltantes do dia ─────────────────────────────────────────────────────────
+
+function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function formatDayLabel(isoDate: string): string {
+  return new Date(`${isoDate}T00:00:00`).toLocaleDateString("pt-BR");
+}
+
+interface FaltantesDoDiaCardProps {
+  rows: RhidProcessedRow[];
+  dataIni?: string;
+  dataFinal?: string;
+}
+
+function FaltantesDoDiaCard({ rows, dataIni, dataFinal }: FaltantesDoDiaCardProps): JSX.Element {
+  const hoje = todayIso();
+  const hojeNoPeriodo = (!dataIni || hoje >= dataIni) && (!dataFinal || hoje <= dataFinal);
+  // Se o período não inclui hoje, mostra os faltantes do último dia do período
+  const diaReferencia = hojeNoPeriodo ? hoje : (dataFinal ?? hoje);
+  const faltantes = rows
+    .filter((row) => (row.datasFaltas ?? []).includes(diaReferencia))
+    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+
+  return (
+    <article className="ranking-card">
+      <h4>
+        Faltantes do dia
+        {!hojeNoPeriodo && ` (${formatDayLabel(diaReferencia)})`}
+      </h4>
+      {faltantes.length === 0 ? (
+        <p className="empty-text">
+          {hojeNoPeriodo
+            ? "Nenhuma falta registrada hoje."
+            : `Nenhuma falta registrada em ${formatDayLabel(diaReferencia)} (último dia do período).`}
+        </p>
+      ) : (
+        <ul>
+          {faltantes.map((row) => (
+            <li key={`faltante-dia-${row.id}`}>
+              <div>
+                <strong>{row.nome}</strong>
+                <span>
+                  {row.departamento || row.cargo || "Sem departamento"} | Faltas no período: {formatFaltas(row.faltas)}
+                </span>
+              </div>
+              <b>{formatDayLabel(diaReferencia)}</b>
+            </li>
+          ))}
+        </ul>
+      )}
+    </article>
+  );
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function normalizeName(name: string): string {
@@ -1037,6 +1094,8 @@ export function RhidAnalysisPanel({ report, onReportUpdate, purchases, vales, da
       </div>
 
       <div className="rhid-list-grid">
+        <FaltantesDoDiaCard rows={effectiveRows} dataIni={dataIni} dataFinal={dataFinal} />
+
         <RankingList
           title="Colaboradores com mais atrasos"
           rows={effectiveLists.maisAtrasos}

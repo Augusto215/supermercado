@@ -49,6 +49,8 @@ export interface RhidRawRow {
   bancoSaldoMin: number;
   semEscala: boolean;
   quantidadeAtrasos: number;
+  /** Datas (YYYY-MM-DD) em que o colaborador teve falta de dia inteiro. */
+  datasFaltas: string[];
 }
 
 export interface RhidProcessedRow {
@@ -71,6 +73,8 @@ export interface RhidProcessedRow {
   /** Dias de atestado/abono no período (justificados). */
   diasAbono: number;
   semEscala: boolean;
+  /** Datas (YYYY-MM-DD) em que o colaborador teve falta de dia inteiro. Pode estar ausente em relatórios antigos em cache. */
+  datasFaltas?: string[];
   /** Total de compras do funcionário no período (pré-computado ou editado manualmente) */
   compras?: number;
   /** Total de vales do funcionário no período (pré-computado ou editado manualmente) */

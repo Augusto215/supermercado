@@ -269,6 +269,7 @@ function extractMetricsFromApuracao(
   bancoSaldoMin: number;
   semEscala: boolean;
   quantidadeAtrasos: number;
+  datasFaltas: string[];
 }> {
   const dias = result.dias;
 
@@ -290,6 +291,7 @@ function extractMetricsFromApuracao(
   let extraNoturnaMin = 0;
   let bancoSaldoMin = 0;
   let quantidadeAtrasos = 0;
+  const datasFaltas: string[] = [];
 
   for (const dia of dias) {
     totalNormaisMin += dia.horasDiurnasNaoExtra ?? 0;
@@ -298,6 +300,8 @@ function extractMetricsFromApuracao(
     // Faltas: dia inteiro, exceto folga programada com neutro=true
     if (dia.faltaDiaInteiro === true && !(dia.folga === true && dia.neutro === true)) {
       diaFalta += 1;
+      const dataDia = resolveDiaDate(dia);
+      if (dataDia) datasFaltas.push(dataDia);
     }
 
     const diaTotalAtraso = (dia.atrasoEntrada ?? 0) + (dia.saidaAntecipada ?? 0) + (dia.horasApenasFalta ?? 0);
@@ -342,7 +346,22 @@ function extractMetricsFromApuracao(
     bancoSaldoMin,
     semEscala,
     quantidadeAtrasos,
+    datasFaltas,
   };
+}
+
+/** Resolve a data (YYYY-MM-DD) de um dia da apuração. */
+function resolveDiaDate(dia: {
+  date?: string;
+  dateTimeStr?: string;
+}): string | null {
+  if (typeof dia.date === "string" && dia.date.length >= 10) {
+    return dia.date.slice(0, 10);
+  }
+  if (typeof dia.dateTimeStr === "string" && /^\d{8}$/.test(dia.dateTimeStr)) {
+    return `${dia.dateTimeStr.slice(0, 4)}-${dia.dateTimeStr.slice(4, 6)}-${dia.dateTimeStr.slice(6, 8)}`;
+  }
+  return null;
 }
 
 // ─── Helpers de linha bruta ───────────────────────────────────────────────────
@@ -372,6 +391,7 @@ function baseRawRow(person: RhidPersonDTO, fallbackIndex: number): RhidRawRow {
     bancoSaldoMin: 0,
     semEscala: false,
     quantidadeAtrasos: 0,
+    datasFaltas: [],
   };
 }
 
@@ -394,6 +414,7 @@ function mergeRawMetrics(
     bancoSaldoMin: base.bancoSaldoMin + (metrics.bancoSaldoMin ?? 0),
     semEscala: base.semEscala && (metrics.semEscala ?? true),
     quantidadeAtrasos: base.quantidadeAtrasos + (metrics.quantidadeAtrasos ?? 0),
+    datasFaltas: [...base.datasFaltas, ...(metrics.datasFaltas ?? [])],
   };
 }
 
@@ -697,6 +718,7 @@ export function processRows(
       valorValeRefeicao,
       diasAbono: row.diasAbono,
       semEscala: row.semEscala,
+      datasFaltas: [...row.datasFaltas].sort(),
     };
   });
 }

@@ -14,6 +14,24 @@ create table if not exists employee_purchases (
   created_at    timestamptz default now()
 );
 
+-- ── Vales dos Funcionários ────────────────────────────────────────────────────
+create table if not exists employee_vales (
+  id               uuid        primary key default gen_random_uuid(),
+  funcionario_id   text        not null,
+  funcionario_nome text        not null,
+  descricao        text        not null,
+  dia              date        not null,
+  valor            numeric(10,2) not null check (valor > 0),
+  forma_pagamento  text        not null default 'avista' check (forma_pagamento in ('avista', 'parcelado')),
+  parcelas         integer     not null default 1 check (parcelas >= 1),
+  created_at       timestamptz default now()
+);
+
+-- Migração para bancos onde employee_vales já existia sem os campos de pagamento:
+alter table employee_vales
+  add column if not exists forma_pagamento text not null default 'avista',
+  add column if not exists parcelas integer not null default 1;
+
 -- ── Diferença de Caixa ────────────────────────────────────────────────────────
 -- Cada importação salva o lote inteiro. O lote mais recente é o "atual".
 create table if not exists cash_differences (

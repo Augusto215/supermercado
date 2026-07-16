@@ -21,6 +21,8 @@ interface CreateValeBody {
   descricao: string;
   dia: string;
   valor: number;
+  formaPagamento?: "avista" | "parcelado";
+  parcelas?: number;
 }
 
 export async function POST(request: Request) {
@@ -37,6 +39,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Dados incompletos." }, { status: 422 });
   }
 
+  const formaPagamento = body.formaPagamento ?? "avista";
+  if (formaPagamento !== "avista" && formaPagamento !== "parcelado") {
+    return NextResponse.json({ error: "Forma de pagamento inválida." }, { status: 422 });
+  }
+
+  const parcelas = formaPagamento === "parcelado" ? body.parcelas : 1;
+  if (
+    formaPagamento === "parcelado" &&
+    (typeof parcelas !== "number" || !Number.isInteger(parcelas) || parcelas < 2)
+  ) {
+    return NextResponse.json(
+      { error: "Informe a quantidade de parcelas (mínimo 2) para vale parcelado." },
+      { status: 422 }
+    );
+  }
+
   const { data, error } = await supabase
     .from("employee_vales")
     .insert({
@@ -44,7 +62,9 @@ export async function POST(request: Request) {
       funcionario_nome: funcionarioNome,
       descricao,
       dia,
-      valor
+      valor,
+      forma_pagamento:  formaPagamento,
+      parcelas
     })
     .select()
     .single();
