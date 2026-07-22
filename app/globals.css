@@ -1439,6 +1439,37 @@ tbody tr:nth-child(2n) td { background: var(--surface-2); }
 }
 
 /* ═══════════════════════════════════════════
+   ANIVERSARIANTES
+═══════════════════════════════════════════ */
+
+.birthdays-today-banner {
+  border-color: rgba(250, 204, 21, 0.35);
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.08), transparent 60%);
+}
+
+.birthdays-today-list {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.birthday-chip {
+  border-radius: 999px;
+  padding: 6px 12px;
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  background: rgba(250, 204, 21, 0.1);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.birthday-chip small {
+  font-weight: 400;
+  color: var(--text-2);
+}
+
+/* ═══════════════════════════════════════════
    FIELDS / FIELD METRICS
 ═══════════════════════════════════════════ */
 

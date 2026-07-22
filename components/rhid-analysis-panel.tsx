@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { type RhidAnalyticalSummary, type RhidProcessedRow, type RhidReportData } from "@/lib/types";
+import { PontoAlertsSummaryCard } from "@/components/ponto-alerts-summary-card";
 
 const TOP_LIST_SIZE = 10;
 
@@ -1095,6 +1096,8 @@ export function RhidAnalysisPanel({ report, onReportUpdate, purchases, vales, da
 
       <div className="rhid-list-grid">
         <FaltantesDoDiaCard rows={effectiveRows} dataIni={dataIni} dataFinal={dataFinal} />
+
+        <PontoAlertsSummaryCard dataIni={dataIni} dataFinal={dataFinal} />
 
         <RankingList
           title="Colaboradores com mais atrasos"

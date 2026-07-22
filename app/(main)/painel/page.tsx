@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { RhidAnalysisPanel } from "@/components/rhid-analysis-panel";
+import { BirthdaysTodayWidget } from "@/components/birthdays-today-widget";
 import { usePayroll } from "@/components/payroll-provider";
 import { FIELD_DEFINITIONS } from "@/lib/fields";
 import { exportRhidPainelReport, type ExportPurchaseRow, type ExportCashDiffRow, type ExportValeRow } from "@/lib/export-csv";
@@ -342,6 +343,8 @@ export default function PainelPage(): JSX.Element {
 
     return (
       <div className="page-stack">
+        <BirthdaysTodayWidget />
+
         {/* Cabeçalho + exportar */}
         <section className="panel">
           <div className="panel-head split" style={{ marginBottom: 16 }}>
@@ -403,11 +406,14 @@ export default function PainelPage(): JSX.Element {
 
   /* ── Tela inicial ── */
   return (
-    <section className="panel">
-      <div className="panel-head">
-        <h3>Painel RHiD</h3>
-        <p>Selecione o período para gerar o relatório de apuração de ponto.</p>
-      </div>
+    <div className="page-stack">
+      <BirthdaysTodayWidget />
+
+      <section className="panel">
+        <div className="panel-head">
+          <h3>Painel RHiD</h3>
+          <p>Selecione o período para gerar o relatório de apuração de ponto.</p>
+        </div>
 
       {/* Tabs de modo */}
       <div className="mode-tabs">
@@ -534,6 +540,7 @@ export default function PainelPage(): JSX.Element {
           )}
         </div>
       )}
-    </section>
+      </section>
+    </div>
   );
 }

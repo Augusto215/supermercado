@@ -39,3 +39,26 @@ export interface DbCashDifference {
   arquivo: string | null;
   importado_em: string;
 }
+
+export interface DbEmployeeBirthday {
+  id: string;
+  funcionario_id: string;
+  funcionario_nome: string;
+  data_nascimento: string; // ISO date string "YYYY-MM-DD"
+  created_at: string;
+}
+
+export interface DbPontoAlertaDiario {
+  id: string;
+  funcionario_id: string;
+  funcionario_nome: string;
+  departamento: string | null;
+  cargo: string | null;
+  dia: string; // ISO date string "YYYY-MM-DD"
+  extra_min: number;
+  mais_2h_extra: boolean;
+  batida_incompleta: boolean;
+  qtd_batidas: number;
+  detalhe: string | null;
+  atualizado_em: string;
+}

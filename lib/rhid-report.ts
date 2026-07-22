@@ -17,8 +17,7 @@ import {
 } from "@/lib/types";
 
 const DEFAULT_WORK_DAYS = 26;
-const VALE_REFEICAO_BASE = 15.82;
-const VALE_REFEICAO_PERCENT = 0.2;
+const VALE_REFEICAO_BASE = 16.5;
 const DEFAULT_APURACAO_CONCURRENCY = 1;
 const MIN_APURACAO_CONCURRENCY = 1;
 const MAX_APURACAO_CONCURRENCY = 10;
@@ -34,13 +33,13 @@ const MAX_APURACAO_MAX_FAILURES = 500;
 const DEFAULT_REPORT_CACHE_TTL_SEC = 300;
 const DEFAULT_ACTIVE_PERSON_STATUSES = [1];
 
-interface ReportPeriod {
+export interface ReportPeriod {
   dataIni: string;
   dataFinal: string;
   diasUteis: number;
 }
 
-interface ApuracaoChunk {
+export interface ApuracaoChunk {
   dataIni: string;
   dataFinal: string;
 }
@@ -93,7 +92,7 @@ function countBusinessDays(start: Date, end: Date): number {
 
 // ─── Período ──────────────────────────────────────────────────────────────────
 
-function resolvePeriod(overrideIni?: string, overrideFinal?: string): ReportPeriod {
+export function resolvePeriod(overrideIni?: string, overrideFinal?: string): ReportPeriod {
   const now = new Date();
   // Padrão: dia 21 do mês anterior ao dia 20 do mês atual
   const prevMonthIdx = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
@@ -125,12 +124,12 @@ function resolvePeriod(overrideIni?: string, overrideFinal?: string): ReportPeri
 
 // ─── Configurações via env ────────────────────────────────────────────────────
 
-function shouldFetchApuracao(): boolean {
+export function shouldFetchApuracao(): boolean {
   const raw = (process.env.RHID_FETCH_APURACAO ?? "true").trim().toLowerCase();
   return raw !== "false" && raw !== "0" && raw !== "no";
 }
 
-function getApuracaoConcurrency(): number {
+export function getApuracaoConcurrency(): number {
   const raw = Number((process.env.RHID_APURACAO_CONCURRENCY ?? "").trim());
   if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_APURACAO_CONCURRENCY;
   return Math.max(
@@ -139,7 +138,7 @@ function getApuracaoConcurrency(): number {
   );
 }
 
-function getApuracaoChunkDays(): number {
+export function getApuracaoChunkDays(): number {
   const raw = Number((process.env.RHID_APURACAO_CHUNK_DAYS ?? "").trim());
   if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_APURACAO_CHUNK_DAYS;
   return Math.max(
@@ -148,13 +147,13 @@ function getApuracaoChunkDays(): number {
   );
 }
 
-function getApuracaoTimeoutMs(): number {
+export function getApuracaoTimeoutMs(): number {
   const raw = Number((process.env.RHID_APURACAO_TIMEOUT_MS ?? "").trim());
   if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_APURACAO_TIMEOUT_MS;
   return Math.max(1_000, Math.min(MAX_APURACAO_TIMEOUT_MS, Math.floor(raw)));
 }
 
-function getApuracaoTotalTimeoutMs(): number {
+export function getApuracaoTotalTimeoutMs(): number {
   const raw = Number(
     (process.env.RHID_APURACAO_TOTAL_TIMEOUT_MS ?? "").trim()
   );
@@ -166,7 +165,7 @@ function getApuracaoTotalTimeoutMs(): number {
   );
 }
 
-function getApuracaoMaxFailures(): number {
+export function getApuracaoMaxFailures(): number {
   const raw = Number((process.env.RHID_APURACAO_MAX_FAILURES ?? "").trim());
   if (!Number.isFinite(raw)) return DEFAULT_APURACAO_MAX_FAILURES;
   if (raw <= 0) return 0;
@@ -220,7 +219,7 @@ function resolvePersonStatus(person: RhidPersonDTO): number | null {
   return null;
 }
 
-function filterActivePeople(people: RhidPersonDTO[]): {
+export function filterActivePeople(people: RhidPersonDTO[]): {
   activePeople: RhidPersonDTO[];
   inactiveCount: number;
   missingStatusCount: number;
@@ -351,7 +350,7 @@ function extractMetricsFromApuracao(
 }
 
 /** Resolve a data (YYYY-MM-DD) de um dia da apuração. */
-function resolveDiaDate(dia: {
+export function resolveDiaDate(dia: {
   date?: string;
   dateTimeStr?: string;
 }): string | null {
@@ -420,7 +419,7 @@ function mergeRawMetrics(
 
 // ─── Timeout helper ───────────────────────────────────────────────────────────
 
-function withTimeout<T>(
+export function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
   label: string
@@ -439,7 +438,7 @@ function withTimeout<T>(
 
 // ─── Concorrência ─────────────────────────────────────────────────────────────
 
-async function mapWithConcurrency<TInput, TOutput>(
+export async function mapWithConcurrency<TInput, TOutput>(
   items: TInput[],
   limit: number,
   mapper: (item: TInput, index: number) => Promise<TOutput>
@@ -461,7 +460,7 @@ async function mapWithConcurrency<TInput, TOutput>(
 
 // ─── Chunks de período ────────────────────────────────────────────────────────
 
-function splitPeriodIntoChunks(
+export function splitPeriodIntoChunks(
   period: ReportPeriod,
   chunkDays: number
 ): ApuracaoChunk[] {
@@ -687,12 +686,8 @@ export function processRows(
     const statusFaltas: "DESCONTAR" | "OK" = faltas > 1 ? "DESCONTAR" : "OK";
 
     const baseDiasVale = Math.max(0, diasUteis - faltas);
-    const valorValeRefeicao = roundTwo(
-      baseDiasVale * VALE_REFEICAO_BASE * VALE_REFEICAO_PERCENT
-    );
-    const descontoPorFalta = roundTwo(
-      faltas * VALE_REFEICAO_BASE * VALE_REFEICAO_PERCENT
-    );
+    const valorValeRefeicao = roundTwo(baseDiasVale * VALE_REFEICAO_BASE);
+    const descontoPorFalta = roundTwo(faltas * VALE_REFEICAO_BASE);
     const valorDesconto = statusFaltas === "DESCONTAR" ? descontoPorFalta : 0;
     const motivoDesconto =
       statusFaltas === "DESCONTAR"
@@ -792,7 +787,7 @@ export function buildSummary(
     ),
     maiorHorasExtras: pickTop(lists.maisHorasExtras),
     diasUteisConsiderados: diasUteis,
-    regraValeRefeicao: "(Dias uteis - faltas) x 15,82 x 20%",
+    regraValeRefeicao: "(Dias uteis - faltas) x R$ 16,50",
   };
 }
 

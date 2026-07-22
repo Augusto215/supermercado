@@ -32,6 +32,38 @@ alter table employee_vales
   add column if not exists forma_pagamento text not null default 'avista',
   add column if not exists parcelas integer not null default 1;
 
+-- ── Aniversariantes ───────────────────────────────────────────────────────────
+-- A API do RHiD não expõe data de nascimento, então mantemos esse cadastro à parte.
+create table if not exists employee_birthdays (
+  id               uuid        primary key default gen_random_uuid(),
+  funcionario_id   text        not null,
+  funcionario_nome text        not null,
+  data_nascimento  date        not null,
+  created_at       timestamptz default now(),
+  unique (funcionario_id)
+);
+
+-- ── Alertas diários de ponto (batida incompleta / mais de 2h extra no dia) ────
+-- Alimentada pelo job automático (a cada 10 min) que lê a apuração do RHiD.
+create table if not exists ponto_alertas_diarios (
+  id                 uuid        primary key default gen_random_uuid(),
+  funcionario_id     text        not null,
+  funcionario_nome   text        not null,
+  departamento       text        default '',
+  cargo              text        default '',
+  dia                date        not null,
+  extra_min          integer     not null default 0,
+  mais_2h_extra      boolean     not null default false,
+  batida_incompleta  boolean     not null default false,
+  qtd_batidas        integer     not null default 0,
+  detalhe            text        default '',
+  atualizado_em      timestamptz default now(),
+  unique (funcionario_id, dia)
+);
+
+create index if not exists ponto_alertas_diarios_dia_idx on ponto_alertas_diarios (dia);
+create index if not exists ponto_alertas_diarios_alerta_idx on ponto_alertas_diarios (mais_2h_extra, batida_incompleta);
+
 -- ── Diferença de Caixa ────────────────────────────────────────────────────────
 -- Cada importação salva o lote inteiro. O lote mais recente é o "atual".
 create table if not exists cash_differences (

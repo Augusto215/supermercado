@@ -8,6 +8,8 @@ import { usePayroll } from "@/components/payroll-provider";
 
 const NAV_ITEMS = [
   { href: "/painel",               label: "Painel RHiD",          icon: "📊" },
+  { href: "/alertas-ponto",        label: "Alertas de Ponto",     icon: "⏰" },
+  { href: "/aniversariantes",      label: "Aniversariantes",      icon: "🎂" },
   { href: "/diferenca-caixa",      label: "Diferença de Caixa",   icon: "💰" },
   { href: "/compras-funcionarios", label: "Compras Funcionários",  icon: "🛒" },
   { href: "/vales-funcionarios",   label: "Vales Funcionários",    icon: "💵" },
