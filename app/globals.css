@@ -1447,6 +1447,42 @@ tbody tr:nth-child(2n) td { background: var(--surface-2); }
   background: linear-gradient(135deg, rgba(250, 204, 21, 0.08), transparent 60%);
 }
 
+.birthdays-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+/* Barra de ações que revela o cadastro manual e a lista completa. */
+.panel-toolbar {
+  margin-top: 18px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.panel-toolbar .secondary-btn.active {
+  background: var(--green-bg);
+  color: var(--green-2);
+  border-color: var(--border-strong);
+}
+
+.birthdays-list {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.birthdays-list .filter-input {
+  margin-bottom: 12px;
+  max-width: 320px;
+}
+
+@media (max-width: 720px) {
+  .birthdays-grid { grid-template-columns: 1fr; }
+}
+
 .birthdays-today-list {
   margin-top: 10px;
   display: flex;

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
-import { resolvePeriod } from "@/lib/rhid-report";
-import { refreshDailyPontoAlerts } from "@/lib/ponto-alerts";
+import { refreshDailyPontoAlerts, resolveAlertPeriod } from "@/lib/ponto-alerts";
 
 export const dynamic = "force-dynamic";
 
@@ -15,8 +14,8 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const dataIni = toDateString(url.searchParams.get("dataIni"));
   const dataFinal = toDateString(url.searchParams.get("dataFinal"));
-  const tipo = url.searchParams.get("tipo"); // "2h" | "batida" | null (todos)
-  const period = resolvePeriod(dataIni, dataFinal);
+  const tipo = url.searchParams.get("tipo"); // "atraso" | "batida" | null (todos)
+  const period = resolveAlertPeriod(dataIni, dataFinal);
 
   let query = supabase
     .from("ponto_alertas_diarios")
@@ -26,8 +25,8 @@ export async function GET(request: Request) {
     .order("dia", { ascending: false })
     .order("funcionario_nome", { ascending: true });
 
-  if (tipo === "2h") {
-    query = query.eq("mais_2h_extra", true);
+  if (tipo === "atraso") {
+    query = query.eq("tem_atraso", true);
   } else if (tipo === "batida") {
     query = query.eq("batida_incompleta", true);
   }
@@ -60,6 +59,7 @@ export async function POST(request: Request) {
       colaboradoresProcessados: result.colaboradoresProcessados,
       alertasEncontrados: result.alerts.length,
       persistidos: result.persistidos,
+      removidos: result.removidos,
       warnings: result.warnings,
     });
   } catch (error) {

@@ -9,8 +9,8 @@ interface AlertRow {
   departamento: string | null;
   cargo: string | null;
   dia: string;
-  extra_min: number;
-  mais_2h_extra: boolean;
+  atraso_min: number;
+  tem_atraso: boolean;
   batida_incompleta: boolean;
   qtd_batidas: number;
   detalhe: string | null;
@@ -22,7 +22,7 @@ interface Period {
   dataFinal: string;
 }
 
-type TipoFiltro = "TODOS" | "2h" | "batida";
+type TipoFiltro = "TODOS" | "atraso" | "batida";
 
 function formatMinutes(totalMinutes: number): string {
   const hours = Math.floor(totalMinutes / 60);
@@ -40,6 +40,9 @@ function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString("pt-BR");
 }
 
+/** De quanto em quanto tempo a tela relê os alertas do banco. */
+const AUTO_REFRESH_MS = 60_000;
+
 export function PontoAlertsPanel(): JSX.Element {
   const [rows, setRows] = useState<AlertRow[]>([]);
   const [period, setPeriod] = useState<Period | null>(null);
@@ -48,9 +51,11 @@ export function PontoAlertsPanel(): JSX.Element {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [ultimaLeitura, setUltimaLeitura] = useState<Date | null>(null);
 
-  const loadAlerts = useCallback(async (nextTipo: TipoFiltro) => {
-    setLoading(true);
+  /** `silencioso` evita piscar "Carregando..." nas releituras automáticas. */
+  const loadAlerts = useCallback(async (nextTipo: TipoFiltro, silencioso = false) => {
+    if (!silencioso) setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams();
@@ -60,15 +65,25 @@ export function PontoAlertsPanel(): JSX.Element {
       const data = (await res.json()) as { period: Period; rows: AlertRow[] };
       setRows(Array.isArray(data.rows) ? data.rows : []);
       setPeriod(data.period);
+      setUltimaLeitura(new Date());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha ao carregar alertas de ponto.");
     } finally {
-      setLoading(false);
+      if (!silencioso) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     void loadAlerts(tipo);
+  }, [tipo, loadAlerts]);
+
+  // Releitura automática: o servidor relê o RHiD a cada 10 min, então a tela
+  // busca o que já está no banco a cada minuto e se atualiza sozinha.
+  useEffect(() => {
+    const id = setInterval(() => {
+      void loadAlerts(tipo, true);
+    }, AUTO_REFRESH_MS);
+    return () => clearInterval(id);
   }, [tipo, loadAlerts]);
 
   const handleRefreshAgora = async () => {
@@ -100,13 +115,13 @@ export function PontoAlertsPanel(): JSX.Element {
 
   const metrics = useMemo(() => {
     const colaboradores = new Set(filteredRows.map((r) => r.funcionario_id));
-    const com2h = filteredRows.filter((r) => r.mais_2h_extra).length;
+    const comAtraso = filteredRows.filter((r) => r.tem_atraso).length;
     const comBatida = filteredRows.filter((r) => r.batida_incompleta).length;
     const ultimaAtualizacao = filteredRows.reduce<string | null>((max, r) => {
       if (!max || r.atualizado_em > max) return r.atualizado_em;
       return max;
     }, null);
-    return { colaboradores: colaboradores.size, com2h, comBatida, ultimaAtualizacao };
+    return { colaboradores: colaboradores.size, comAtraso, comBatida, ultimaAtualizacao };
   }, [filteredRows]);
 
   return (
@@ -116,9 +131,10 @@ export function PontoAlertsPanel(): JSX.Element {
           <p className="section-kicker">Dia a dia</p>
           <h3>Alertas de Ponto</h3>
           <p>
-            Colaboradores que ultrapassaram 2h de hora extra em um único dia ou que ficaram com uma batida
-            incompleta no ponto (entrada ou saída não registrada). Atualizado automaticamente a cada 10 minutos
-            a partir da API do RHiD.
+            Colaboradores que registraram atraso hoje ou que ficaram com uma batida incompleta no ponto
+            (entrada ou saída não registrada). O servidor relê o RHiD a cada 10 minutos e esta tela se
+            atualiza sozinha a cada minuto — os alertas do dia vão aparecendo conforme o expediente é
+            encerrado.
           </p>
         </div>
         <button className="btn btn-primary" onClick={() => void handleRefreshAgora()} disabled={refreshing}>
@@ -128,9 +144,16 @@ export function PontoAlertsPanel(): JSX.Element {
 
       {period && (
         <p className="period-hint">
-          Período: <strong>{formatDate(period.dataIni)} até {formatDate(period.dataFinal)}</strong>
+          {period.dataIni === period.dataFinal ? (
+            <>Dia: <strong>{formatDate(period.dataIni)}</strong></>
+          ) : (
+            <>Período: <strong>{formatDate(period.dataIni)} até {formatDate(period.dataFinal)}</strong></>
+          )}
           {metrics.ultimaAtualizacao && (
             <> &mdash; última leitura do ponto: <strong>{formatDateTime(metrics.ultimaAtualizacao)}</strong></>
+          )}
+          {ultimaLeitura && (
+            <> &mdash; tela atualizada às <strong>{ultimaLeitura.toLocaleTimeString("pt-BR")}</strong></>
           )}
         </p>
       )}
@@ -147,8 +170,8 @@ export function PontoAlertsPanel(): JSX.Element {
           <strong>{metrics.colaboradores}</strong>
         </article>
         <article className="metric-card sunset">
-          <span>Dias com +2h de extra</span>
-          <strong>{metrics.com2h}</strong>
+          <span>Dias com atraso</span>
+          <strong>{metrics.comAtraso}</strong>
         </article>
         <article className="metric-card ocean">
           <span>Dias com batida incompleta</span>
@@ -163,7 +186,7 @@ export function PontoAlertsPanel(): JSX.Element {
               <span>Tipo de alerta</span>
               <select value={tipo} onChange={(e) => setTipo(e.target.value as TipoFiltro)}>
                 <option value="TODOS">Todos os alertas</option>
-                <option value="2h">Somente +2h de extra no dia</option>
+                <option value="atraso">Somente atraso no dia</option>
                 <option value="batida">Somente batida incompleta</option>
               </select>
             </label>
@@ -186,7 +209,7 @@ export function PontoAlertsPanel(): JSX.Element {
               <th>Dia</th>
               <th>Funcionario</th>
               <th>Departamento</th>
-              <th>Extra no dia</th>
+              <th>Atraso no dia</th>
               <th>Batidas no dia</th>
               <th>Alerta</th>
               <th>Detalhe</th>
@@ -207,11 +230,11 @@ export function PontoAlertsPanel(): JSX.Element {
                   <td>{formatDate(row.dia)}</td>
                   <td><strong>{row.funcionario_nome}</strong></td>
                   <td>{row.departamento || "—"}</td>
-                  <td>{formatMinutes(row.extra_min)}</td>
+                  <td>{formatMinutes(row.atraso_min)}</td>
                   <td>{row.qtd_batidas}</td>
                   <td>
                     <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap" }}>
-                      {row.mais_2h_extra && <span className="status-pill danger">+2H EXTRA</span>}
+                      {row.tem_atraso && <span className="status-pill danger">ATRASO</span>}
                       {row.batida_incompleta && <span className="status-pill danger">BATIDA INCOMPLETA</span>}
                     </div>
                   </td>

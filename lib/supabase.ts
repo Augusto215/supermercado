@@ -55,8 +55,8 @@ export interface DbPontoAlertaDiario {
   departamento: string | null;
   cargo: string | null;
   dia: string; // ISO date string "YYYY-MM-DD"
-  extra_min: number;
-  mais_2h_extra: boolean;
+  atraso_min: number;
+  tem_atraso: boolean;
   batida_incompleta: boolean;
   qtd_batidas: number;
   detalhe: string | null;

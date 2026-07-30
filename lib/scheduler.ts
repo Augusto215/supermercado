@@ -7,10 +7,15 @@
  */
 import { loadRhidReportData } from "@/lib/rhid-report";
 import { refreshDailyPontoAlerts } from "@/lib/ponto-alerts";
+import { refreshEmployeeBirthdays } from "@/lib/birthday-sync";
 
 const DEFAULT_INTERVAL_MS = 10 * 60 * 1000; // 10 minutos
 const MIN_INTERVAL_MS = 60 * 1000;
 const INITIAL_DELAY_MS = 15 * 1000; // pequeno atraso para o servidor terminar de subir
+
+// Aniversários mudam raramente: sincroniza na subida e depois a cada 12h.
+const DEFAULT_BIRTHDAY_INTERVAL_MS = 12 * 60 * 60 * 1000;
+const BIRTHDAY_INITIAL_DELAY_MS = 45 * 1000;
 
 declare global {
   // eslint-disable-next-line no-var
@@ -20,6 +25,12 @@ declare global {
 function getIntervalMs(): number {
   const raw = Number((process.env.RHID_AUTO_REFRESH_INTERVAL_MS ?? "").trim());
   if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_INTERVAL_MS;
+  return Math.max(MIN_INTERVAL_MS, Math.floor(raw));
+}
+
+function getBirthdayIntervalMs(): number {
+  const raw = Number((process.env.RHID_BIRTHDAY_SYNC_INTERVAL_MS ?? "").trim());
+  if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_BIRTHDAY_INTERVAL_MS;
   return Math.max(MIN_INTERVAL_MS, Math.floor(raw));
 }
 
@@ -47,7 +58,7 @@ async function runRefreshCycle(): Promise<void> {
   try {
     const result = await refreshDailyPontoAlerts();
     console.log(
-      `[Scheduler] Alertas de ponto atualizados: ${result.alerts.length} alerta(s) em ${result.colaboradoresProcessados} colaboradores (${result.persistidos} persistido(s)).`
+      `[Scheduler] Alertas de ponto atualizados: ${result.alerts.length} alerta(s) em ${result.colaboradoresProcessados} colaboradores (${result.persistidos} persistido(s), ${result.removidos} removido(s)).`
     );
   } catch (error) {
     console.error(
@@ -57,6 +68,20 @@ async function runRefreshCycle(): Promise<void> {
   }
 
   console.log(`[Scheduler] Ciclo concluido em ${Date.now() - startedAt}ms.`);
+}
+
+async function runBirthdaySyncCycle(): Promise<void> {
+  try {
+    const result = await refreshEmployeeBirthdays();
+    console.log(
+      `[Scheduler] Aniversarios sincronizados do RHiD: ${result.persistidos} gravados (${result.processados} cadastros lidos).`
+    );
+  } catch (error) {
+    console.error(
+      "[Scheduler] Falha ao sincronizar aniversarios do RHiD:",
+      error instanceof Error ? error.message : String(error)
+    );
+  }
 }
 
 export function startPontoScheduler(): void {
@@ -81,4 +106,17 @@ export function startPontoScheduler(): void {
   setInterval(() => {
     void runRefreshCycle();
   }, intervalMs);
+
+  const birthdayIntervalMs = getBirthdayIntervalMs();
+  console.log(
+    `[Scheduler] Sincronizacao de aniversarios do RHiD ativada (a cada ${Math.round(birthdayIntervalMs / 3600000)}h).`
+  );
+
+  setTimeout(() => {
+    void runBirthdaySyncCycle();
+  }, BIRTHDAY_INITIAL_DELAY_MS);
+
+  setInterval(() => {
+    void runBirthdaySyncCycle();
+  }, birthdayIntervalMs);
 }

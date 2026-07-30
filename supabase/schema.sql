@@ -33,7 +33,9 @@ alter table employee_vales
   add column if not exists parcelas integer not null default 1;
 
 -- ── Aniversariantes ───────────────────────────────────────────────────────────
--- A API do RHiD não expõe data de nascimento, então mantemos esse cadastro à parte.
+-- Sincronizada automaticamente com o cadastro do RHiD (serviço interno
+-- customerdb/person.svc, que expõe os dados pessoais). Também aceita cadastro
+-- manual/planilha para quem não está no RHiD (funcionario_id "manual-*").
 create table if not exists employee_birthdays (
   id               uuid        primary key default gen_random_uuid(),
   funcionario_id   text        not null,
@@ -43,7 +45,7 @@ create table if not exists employee_birthdays (
   unique (funcionario_id)
 );
 
--- ── Alertas diários de ponto (batida incompleta / mais de 2h extra no dia) ────
+-- ── Alertas diários de ponto (batida incompleta / atraso no dia) ─────────────
 -- Alimentada pelo job automático (a cada 10 min) que lê a apuração do RHiD.
 create table if not exists ponto_alertas_diarios (
   id                 uuid        primary key default gen_random_uuid(),
@@ -52,8 +54,8 @@ create table if not exists ponto_alertas_diarios (
   departamento       text        default '',
   cargo              text        default '',
   dia                date        not null,
-  extra_min          integer     not null default 0,
-  mais_2h_extra      boolean     not null default false,
+  atraso_min         integer     not null default 0,
+  tem_atraso         boolean     not null default false,
   batida_incompleta  boolean     not null default false,
   qtd_batidas        integer     not null default 0,
   detalhe            text        default '',
@@ -61,8 +63,21 @@ create table if not exists ponto_alertas_diarios (
   unique (funcionario_id, dia)
 );
 
+-- Migração dos bancos onde o alerta era de hora extra em vez de atraso.
+-- O conteúdo é 100% derivado do RHiD e reescrito a cada 10 min, então descartar
+-- as colunas antigas não perde nada que não seja recalculado no próximo ciclo.
+alter table ponto_alertas_diarios
+  add column if not exists atraso_min integer not null default 0,
+  add column if not exists tem_atraso boolean not null default false;
+
+drop index if exists ponto_alertas_diarios_alerta_idx;
+
+alter table ponto_alertas_diarios
+  drop column if exists extra_min,
+  drop column if exists mais_2h_extra;
+
 create index if not exists ponto_alertas_diarios_dia_idx on ponto_alertas_diarios (dia);
-create index if not exists ponto_alertas_diarios_alerta_idx on ponto_alertas_diarios (mais_2h_extra, batida_incompleta);
+create index if not exists ponto_alertas_diarios_alerta_idx on ponto_alertas_diarios (tem_atraso, batida_incompleta);
 
 -- ── Diferença de Caixa ────────────────────────────────────────────────────────
 -- Cada importação salva o lote inteiro. O lote mais recente é o "atual".
