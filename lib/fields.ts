@@ -126,3 +126,10 @@ export const DEFAULT_AUTOMATION_RULES: AutomationRuleConfig[] = [
     ativo: false
   }
 ];
+
+/** Percentual descontado do vale refeição (PAT) — 20% do valor do campo 325. */
+export const DESCONTO_VALE_REFEICAO_PERCENTUAL = 0.2;
+
+export function calcDescontoValeRefeicao(valorValeRefeicao: number): number {
+  return Math.round(Math.max(0, valorValeRefeicao) * DESCONTO_VALE_REFEICAO_PERCENTUAL * 100) / 100;
+}

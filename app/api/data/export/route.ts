@@ -1,3 +1,4 @@
+import { calcDescontoValeRefeicao } from "@/lib/fields";
 import { loadRhidReportData } from "@/lib/rhid-report";
 
 function isTruthyParam(value: string | null): boolean {
@@ -30,7 +31,8 @@ export async function GET(request: Request): Promise<Response> {
     "alertaAtraso",
     "motivoDesconto",
     "valorDesconto",
-    "valorValeRefeicao"
+    "valorValeRefeicao",
+    "descontoValeRefeicao"
   ];
   const rows = report.processedRows.map((row) =>
     [
@@ -44,7 +46,8 @@ export async function GET(request: Request): Promise<Response> {
       row.alertaAtraso,
       row.motivoDesconto,
       row.valorDesconto,
-      row.valorValeRefeicao
+      row.valorValeRefeicao,
+      calcDescontoValeRefeicao(row.valorValeRefeicao)
     ]
       .map(escapeCsvValue)
       .join(",")

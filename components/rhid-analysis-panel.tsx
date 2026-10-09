@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { type RhidAnalyticalSummary, type RhidProcessedRow, type RhidReportData } from "@/lib/types";
 import { PontoAlertsSummaryCard } from "@/components/ponto-alerts-summary-card";
+import { calcDescontoValeRefeicao } from "@/lib/fields";
 
 const TOP_LIST_SIZE = 10;
 
@@ -824,6 +825,7 @@ export function RhidAnalysisPanel({ report, onReportUpdate, purchases, vales, da
               <th>Motivo desconto</th>
               <th>44 - DESCONTO DSR (D)</th>
               <th>325 - VALE REFEIÇÃO</th>
+              <th>Desconto VR (20%)</th>
               <th>Atestado/Folga (dias)</th>
               <th>208 - COMPRAS</th>
               <th>460 - VALE</th>
@@ -1038,6 +1040,9 @@ export function RhidAnalysisPanel({ report, onReportUpdate, purchases, vales, da
                   />
                 </td>
 
+                {/* Desconto vale refeicao (20% do 325) */}
+                <td>{formatCurrency(calcDescontoValeRefeicao(row.valorValeRefeicao))}</td>
+
                 {/* Atestado / Folga (dias) */}
                 <td className={row.semEscala ? "" : "editable-cell"}>
                   {row.semEscala ? "--" : (
@@ -1085,7 +1090,7 @@ export function RhidAnalysisPanel({ report, onReportUpdate, purchases, vales, da
             ))}
             {filteredRows.length === 0 && (
               <tr>
-                <td colSpan={16} className="empty-row">
+                <td colSpan={17} className="empty-row">
                   Nenhum colaborador encontrado para esse filtro.
                 </td>
               </tr>
