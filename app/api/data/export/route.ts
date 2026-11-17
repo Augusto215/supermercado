@@ -32,7 +32,9 @@ export async function GET(request: Request): Promise<Response> {
     "motivoDesconto",
     "valorDesconto",
     "valorValeRefeicao",
-    "descontoValeRefeicao"
+    "descontoValeRefeicao",
+    "vtPadraoDia",
+    "valorValeTransporte"
   ];
   const rows = report.processedRows.map((row) =>
     [
@@ -47,7 +49,9 @@ export async function GET(request: Request): Promise<Response> {
       row.motivoDesconto,
       row.valorDesconto,
       row.valorValeRefeicao,
-      calcDescontoValeRefeicao(row.valorValeRefeicao)
+      calcDescontoValeRefeicao(row.valorValeRefeicao),
+      row.vtPadraoDia ?? "",
+      row.valorValeTransporte ?? 0
     ]
       .map(escapeCsvValue)
       .join(",")

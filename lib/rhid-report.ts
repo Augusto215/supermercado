@@ -7,6 +7,9 @@ import {
   type RhidPersonDTO,
   type RhidApuracaoResult,
 } from "@/lib/rhid-api";
+import { calcValeTransporte } from "@/lib/fields";
+import { diasUteisMesVt } from "@/lib/vale-transporte";
+import { carregarPadroesVt } from "@/lib/vt-padroes-db";
 import { persistRhidReport, readPersistedRhidReport } from "@/lib/rhid-report-db";
 import {
   type RhidAnalyticalSummary,
@@ -37,6 +40,8 @@ export interface ReportPeriod {
   dataIni: string;
   dataFinal: string;
   diasUteis: number;
+  /** Dias úteis do mês atual (mês do fim do período), usados no vale transporte. */
+  diasUteisVt: number;
 }
 
 export interface ApuracaoChunk {
@@ -119,6 +124,7 @@ export function resolvePeriod(overrideIni?: string, overrideFinal?: string): Rep
     dataIni: toDateInput(start),
     dataFinal: toDateInput(end),
     diasUteis,
+    diasUteisVt: diasUteisMesVt(end.getFullYear(), end.getMonth()),
   };
 }
 
@@ -718,6 +724,42 @@ export function processRows(
   });
 }
 
+/**
+ * Vale transporte: (dias úteis do mês atual - faltas do mês anterior) x padrão (R$ por dia).
+ * Os padrões vêm do banco (página Vale Transporte), sempre atualizados a cada leitura,
+ * inclusive em relatórios em cache.
+ */
+async function applyValeTransporte(report: RhidReportData, diasUteisVt: number): Promise<RhidReportData> {
+  const { padroes, erro } = await carregarPadroesVt(
+    report.processedRows.map((r) => ({ id: r.id, nome: r.nome }))
+  );
+  const processedRows = report.processedRows.map((row) => {
+    const padrao = padroes.get(row.id);
+    const padraoDia = padrao?.padraoDia ?? null;
+    return {
+      ...row,
+      vtPadraoDia: padraoDia,
+      vtPadraoOrigem: padrao?.origem ?? "novo",
+      valorValeTransporte: calcValeTransporte(diasUteisVt, row.faltas, padraoDia),
+    };
+  });
+  const active = processedRows.filter((r) => !r.semEscala);
+  const avisoVt = "Padroes de VT: banco indisponivel, usando o backup das planilhas (alteracoes nao serao salvas).";
+  return {
+    ...report,
+    processedRows,
+    warnings: erro && !report.warnings.includes(avisoVt) ? [...report.warnings, avisoVt] : report.warnings,
+    summary: {
+      ...report.summary,
+      totalValeTransporte: roundTwo(
+        processedRows.reduce((sum, r) => sum + (r.valorValeTransporte ?? 0), 0)
+      ),
+      diasUteisVt,
+      colaboradoresSemPadraoVt: active.filter((r) => !r.vtPadraoDia).length,
+    },
+  };
+}
+
 // ─── Listas e sumário ─────────────────────────────────────────────────────────
 
 function sortByMetric(
@@ -840,7 +882,7 @@ export async function loadRhidReportData(
     reportCache.cacheKey === cacheKey &&
     reportCache.expiresAtMs > now
   ) {
-    return reportCache.data;
+    return applyValeTransporte(reportCache.data, period.diasUteisVt);
   }
 
   if (reportInFlight && reportInFlight.cacheKey === cacheKey) {
@@ -858,7 +900,7 @@ export async function loadRhidReportData(
         data: persisted.data,
         expiresAtMs: persisted.expiresAtMs,
       };
-      return persisted.data;
+      return applyValeTransporte(persisted.data, period.diasUteisVt);
     }
   }
 
@@ -1000,7 +1042,7 @@ export async function loadRhidReportData(
       console.error("[RHiD][DB] Falha ao persistir relatorio", error);
     }
 
-    return report;
+    return applyValeTransporte(report, period.diasUteisVt);
   })();
 
   reportInFlight = { cacheKey, promise: runningPromise };

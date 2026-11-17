@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { type RhidAnalyticalSummary, type RhidProcessedRow, type RhidReportData } from "@/lib/types";
 import { PontoAlertsSummaryCard } from "@/components/ponto-alerts-summary-card";
-import { calcDescontoValeRefeicao } from "@/lib/fields";
+import { calcDescontoValeRefeicao, calcValeTransporte } from "@/lib/fields";
 
 const TOP_LIST_SIZE = 10;
 
@@ -52,6 +52,15 @@ function parseNumberInput(str: string): number | null {
 
 // ─── Summary recomputation ────────────────────────────────────────────────────
 
+/** Recalcula o VT da linha usando as faltas efetivas (inclusive editadas manualmente). */
+function withValeTransporte(row: RhidProcessedRow, diasUteisVt: number | undefined): RhidProcessedRow {
+  if (diasUteisVt === undefined || row.vtPadraoDia === undefined) return row;
+  return {
+    ...row,
+    valorValeTransporte: calcValeTransporte(diasUteisVt, row.faltas, row.vtPadraoDia),
+  };
+}
+
 function recomputeSummary(
   rows: RhidProcessedRow[],
   original: RhidAnalyticalSummary
@@ -68,6 +77,7 @@ function recomputeSummary(
     totalAtrasoMin: active.reduce((s, r) => s + r.atrasoTotalMin, 0),
     totalHorasExtrasMin: active.reduce((s, r) => s + r.horasExtrasTotaisMin, 0),
     totalValeRefeicao: active.reduce((s, r) => s + r.valorValeRefeicao, 0),
+    totalValeTransporte: active.reduce((s, r) => s + (r.valorValeTransporte ?? 0), 0),
     totalValorDesconto: active.reduce((s, r) => s + r.valorDesconto, 0),
     totalBancoHorasMin: active.reduce((s, r) => s + r.bancoHorasMin, 0),
     colaboradoresComFaltas: active.filter((r) => r.faltas > 0).length,
@@ -79,6 +89,8 @@ function recomputeSummary(
     maiorHorasExtras: findMax("horasExtrasTotaisMin"),
     diasUteisConsiderados: original.diasUteisConsiderados,
     regraValeRefeicao: original.regraValeRefeicao,
+    diasUteisVt: original.diasUteisVt,
+    colaboradoresSemPadraoVt: active.filter((r) => r.vtPadraoDia === null).length,
   };
 }
 
@@ -390,13 +402,18 @@ export function RhidAnalysisPanel({ report, onReportUpdate, purchases, vales, da
   // Apply overrides to produce effective rows (inclui compras e vales calculados como valor inicial)
   const effectiveRows = useMemo<RhidProcessedRow[]>(
     () =>
-      processedRows.map((row) => ({
-        compras: purchasesByName.get(normalizeName(row.nome)) ?? 0,
-        vale:    valesByName.get(normalizeName(row.nome)) ?? 0,
-        ...row,
-        ...(overrides[row.id] ?? {}),
-      })),
-    [processedRows, overrides, purchasesByName, valesByName]
+      processedRows.map((row) =>
+        withValeTransporte(
+          {
+            compras: purchasesByName.get(normalizeName(row.nome)) ?? 0,
+            vale:    valesByName.get(normalizeName(row.nome)) ?? 0,
+            ...row,
+            ...(overrides[row.id] ?? {}),
+          },
+          summary.diasUteisVt
+        )
+      ),
+    [processedRows, overrides, purchasesByName, valesByName, summary.diasUteisVt]
   );
 
   // Recompute summary from effective rows
@@ -558,12 +575,17 @@ export function RhidAnalysisPanel({ report, onReportUpdate, purchases, vales, da
     setOverrides(newOverrides);
 
     // Compute new rows immediately for parent commit (inclui compras e vales calculados)
-    const newRows = processedRows.map((row) => ({
-      compras: purchasesByName.get(normalizeName(row.nome)) ?? 0,
-      vale:    valesByName.get(normalizeName(row.nome)) ?? 0,
-      ...row,
-      ...(newOverrides[row.id] ?? {}),
-    }));
+    const newRows = processedRows.map((row) =>
+      withValeTransporte(
+        {
+          compras: purchasesByName.get(normalizeName(row.nome)) ?? 0,
+          vale:    valesByName.get(normalizeName(row.nome)) ?? 0,
+          ...row,
+          ...(newOverrides[row.id] ?? {}),
+        },
+        summary.diasUteisVt
+      )
+    );
     commitToParent(newRows);
   };
 
@@ -711,6 +733,17 @@ export function RhidAnalysisPanel({ report, onReportUpdate, purchases, vales, da
           <small>{effectiveSummary.regraValeRefeicao}</small>
         </article>
 
+        <article className="metric-card ocean">
+          <span>Vale Transporte</span>
+          <strong>{formatCurrency(effectiveSummary.totalValeTransporte ?? 0)}</strong>
+          <small>
+            ({effectiveSummary.diasUteisVt ?? "--"} dias uteis - faltas) x padrao/dia
+            {effectiveSummary.colaboradoresSemPadraoVt
+              ? ` · ${effectiveSummary.colaboradoresSemPadraoVt} sem padrao`
+              : ""}
+          </small>
+        </article>
+
         <article className="metric-card sunset">
           <span>Total a descontar</span>
           <strong>{formatCurrency(effectiveSummary.totalValorDesconto)}</strong>
@@ -826,6 +859,7 @@ export function RhidAnalysisPanel({ report, onReportUpdate, purchases, vales, da
               <th>44 - DESCONTO DSR (D)</th>
               <th>325 - VALE REFEIÇÃO</th>
               <th>Desconto VR (20%)</th>
+              <th>Vale transporte</th>
               <th>Atestado/Folga (dias)</th>
               <th>208 - COMPRAS</th>
               <th>460 - VALE</th>
@@ -1043,6 +1077,23 @@ export function RhidAnalysisPanel({ report, onReportUpdate, purchases, vales, da
                 {/* Desconto vale refeicao (20% do 325) */}
                 <td>{formatCurrency(calcDescontoValeRefeicao(row.valorValeRefeicao))}</td>
 
+                {/* Vale transporte: (dias uteis do mes - faltas) x padrao x qtde */}
+                <td
+                  title={
+                    row.vtPadraoDia
+                      ? `(${effectiveSummary.diasUteisVt} - ${row.faltas}) x R$ ${row.vtPadraoDia.toFixed(2)}/dia`
+                      : row.vtPadraoDia === null
+                        ? "Padrao nao preenchido - preencha na pagina Vale Transporte"
+                        : undefined
+                  }
+                >
+                  {row.vtPadraoDia === null
+                    ? "Sem padrao"
+                    : row.valorValeTransporte === undefined
+                      ? "--"
+                      : formatCurrency(row.valorValeTransporte)}
+                </td>
+
                 {/* Atestado / Folga (dias) */}
                 <td className={row.semEscala ? "" : "editable-cell"}>
                   {row.semEscala ? "--" : (
@@ -1090,7 +1141,7 @@ export function RhidAnalysisPanel({ report, onReportUpdate, purchases, vales, da
             ))}
             {filteredRows.length === 0 && (
               <tr>
-                <td colSpan={17} className="empty-row">
+                <td colSpan={18} className="empty-row">
                   Nenhum colaborador encontrado para esse filtro.
                 </td>
               </tr>

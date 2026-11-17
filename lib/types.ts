@@ -70,6 +70,12 @@ export interface RhidProcessedRow {
   motivoDesconto: string;
   valorDesconto: number;
   valorValeRefeicao: number;
+  /** Vale transporte: (dias úteis do mês - faltas) x passagem x qtde. Ausente em relatórios antigos em cache. */
+  valorValeTransporte?: number;
+  /** Padrão do VT (R$ por dia) salvo na página Vale Transporte; null = ainda não preenchido. */
+  vtPadraoDia?: number | null;
+  /** De onde veio o padrão: backup das planilhas, preenchido na tela, ou colaborador novo (em branco). */
+  vtPadraoOrigem?: "planilha" | "manual" | "novo";
   /** Dias de atestado/abono no período (justificados). */
   diasAbono: number;
   semEscala: boolean;
@@ -93,6 +99,7 @@ export interface RhidAnalyticalSummary {
   totalAtrasoMin: number;
   totalHorasExtrasMin: number;
   totalValeRefeicao: number;
+  totalValeTransporte?: number;
   totalValorDesconto: number;
   totalBancoHorasMin: number;
   colaboradoresComFaltas: number;
@@ -104,6 +111,9 @@ export interface RhidAnalyticalSummary {
   maiorHorasExtras: RhidProcessedRow | null;
   diasUteisConsiderados: number;
   regraValeRefeicao: string;
+  /** Dias úteis do mês atual usados no cálculo do VT. */
+  diasUteisVt?: number;
+  colaboradoresSemPadraoVt?: number;
 }
 
 export interface RhidReportData {

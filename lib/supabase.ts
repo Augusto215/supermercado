@@ -62,3 +62,11 @@ export interface DbPontoAlertaDiario {
   detalhe: string | null;
   atualizado_em: string;
 }
+
+export interface DbEmployeeVtPadrao {
+  funcionario_id: string;
+  funcionario_nome: string;
+  padrao_dia: number | null;
+  origem: "planilha" | "manual" | "novo";
+  atualizado_em: string;
+}

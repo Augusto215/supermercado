@@ -91,3 +91,16 @@ create table if not exists cash_differences (
   arquivo       text,                         -- nome do arquivo importado
   importado_em  timestamptz default now()
 );
+
+-- ── Vale Transporte: padrão (R$ por dia) de cada colaborador ─────────────────
+-- Chave = id da pessoa no RHiD. Carga inicial vem das planilhas de transporte
+-- (lib/vt-padroes.json); colaborador novo entra com padrao_dia vazio para o RH
+-- preencher na página "Vale Transporte" — a partir daí o valor fica salvo.
+-- VT = (dias úteis do mês atual - faltas do mês anterior) x padrao_dia
+create table if not exists employee_vt_padroes (
+  funcionario_id   text          primary key,
+  funcionario_nome text          not null,
+  padrao_dia       numeric(10,2) check (padrao_dia is null or padrao_dia >= 0),
+  origem           text          not null default 'novo' check (origem in ('planilha', 'manual', 'novo')),
+  atualizado_em    timestamptz   default now()
+);

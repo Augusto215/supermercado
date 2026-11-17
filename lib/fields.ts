@@ -133,3 +133,28 @@ export const DESCONTO_VALE_REFEICAO_PERCENTUAL = 0.2;
 export function calcDescontoValeRefeicao(valorValeRefeicao: number): number {
   return Math.round(Math.max(0, valorValeRefeicao) * DESCONTO_VALE_REFEICAO_PERCENTUAL * 100) / 100;
 }
+
+/** Dias de VT no mês: dias úteis do mês atual - faltas do mês anterior (mínimo 0). */
+export function calcDiasValeTransporte(diasUteisVt: number, faltas: number): number {
+  return Math.max(0, diasUteisVt - faltas);
+}
+
+/** Vale transporte: (dias úteis do mês atual - faltas do mês anterior) x padrão (R$ por dia). */
+export function calcValeTransporte(
+  diasUteisVt: number,
+  faltas: number,
+  padraoDia: number | null | undefined
+): number {
+  if (!padraoDia || padraoDia <= 0) return 0;
+  return Math.round(calcDiasValeTransporte(diasUteisVt, faltas) * padraoDia * 100) / 100;
+}
+
+/** Dias úteis (segunda a sábado) do mês, sem descontar feriados. mesIndex: 0 = janeiro. */
+export function contarDiasUteisMes(ano: number, mesIndex: number): number {
+  const totalDias = new Date(ano, mesIndex + 1, 0).getDate();
+  let dias = 0;
+  for (let d = 1; d <= totalDias; d++) {
+    if (new Date(ano, mesIndex, d).getDay() !== 0) dias += 1;
+  }
+  return dias;
+}
